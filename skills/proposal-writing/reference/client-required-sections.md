@@ -16,21 +16,39 @@ localisation in KSA", "warranty terms", "local partner model").
   contracting - never invent.
 
 ## kind: indicative_breakdown
-The client asks for an effort split (by module, wave, country, role or workstream).
-- 2-4 sentences: what the breakdown shows, the basis (SAP Best Practice rate card, YASH estimation
-  model, the reviewed scope) and that it is indicative pending fit-to-standard.
+The client asked for a NEW breakdown (by module, wave, country, role or workstream) that the effort
+and cost sections do not already give. Ported from the old indicative-breakdown prompt, with one
+change: the table is now built by the renderer from the approved workbook figures, so every number in
+it is approved, never derived.
+- Write a 2-3 sentence professional introduction: what the breakdown shows and that it comes from the
+  approved effort estimate (SAP Best Practice rate card and the reviewed scope).
 - Put `{{table:indicative_breakdown:<group_by>}}` on its own line, using the section's `group_by`.
-- Do not comment on individual figures; do not compute shares or totals.
-- If effort_detail is withheld, the table is dropped by the renderer: write the basis
-  qualitatively and do not place the placeholder.
+- Do not comment on individual figures, compute shares or totals, or label approved figures
+  "indicative".
+- If effort_detail is withheld, the renderer drops the table: describe the basis qualitatively and do
+  not place the placeholder.
 
 ## kind: phase_plan
-The client asks for a phase / wave plan or a delivery schedule.
-- Describe the sequencing and what each wave delivers (countries, scope), using `timeline` facts.
-- Put `{{table:wave_plan}}` on its own line. Durations come from the table; you may type a wave's
-  stated duration only as `figures.bare_numbers_allowed` lists it.
-- Do not place `{{diagram:timeline}}` - it belongs to 4.3; refer to it ("as shown in the
-  implementation timeline").
+The client's RFP defined explicit phases / waves and asked for the response per phase (ported from the
+old phase-plan prompt). Use the EXACT phases in the requirement's intent - do not invent, merge or
+rename them. An entity, country or scope element the client names that is not clearly assigned to a
+phase: name it in the intro as not yet assigned per the RFP, to be confirmed with the client during
+Prepare - never invent an assignment.
+- Intro: 2-3 sentences, no numbers, no figures.
+- ONE clean, READABLE pipe table, at most 4-5 columns, from this set in this order (only the ones
+  genuinely needed):
+  1. Phase / Wave & Entities - phase name / number and the client entities or business units covered;
+  2. Timeline & SAP Activate Phases - the month range (M1-M6 style, from the timeline view) and the
+     SAP Activate sub-phases inside it (Prepare, Explore, Realize, Deploy, Hypercare); nothing more;
+  3. Key Activities & Deliverables - a SHORT list (max 4-6 items, separated by "; ") of headline
+     activities and named deliverables; no prose paragraphs;
+  4. Modules & Integrations Covered - bare names only ("Finance, MM, PP, QM, SD; ZATCA, LIMS"): no
+     effort, no descriptions, no parenthetical notes.
+- HARD RULES: no RACI column or matrix (the RACI section has it); no Key Assumptions column (3.4 has
+  them); no Entry / Exit Criteria or Quality Gate columns (governance has them); NO person-days,
+  man-months, money or rates anywhere in the table or intro; every cell at most about 60 words.
+- Then `{{table:wave_plan}}` on its own line for the dated wave facts. Do not place
+  `{{diagram:timeline}}` - it belongs to 4.3; refer to it by name.
 
 ## The trailing "additional" section
 When the orchestrator asks for an `additional` section (requirements that fit nowhere else), write

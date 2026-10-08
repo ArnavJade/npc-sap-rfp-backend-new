@@ -1,65 +1,85 @@
 ---
 name: scope-integrations
 description: >-
-  Extracts the third-party (non-SAP) system integrations an SAP RFP requires into the bid ledger -
-  one row per named system that must exchange data with SAP, with functionality, SAP modules,
-  direction, middleware, interface count, complexity and an effort estimate in person-days within
-  the skill's bands. Uses the RFP text, interface lists, landscape tables and transcribed
-  architecture diagrams. Use when building the effort estimate (call 1).
+  Extracts every third-party (non-SAP) integration module or system an SAP RFP names into the bid
+  ledger - one row per external system that must connect to the client's SAP landscape, with its
+  labelled facts (functionality, SAP modules, direction, data exchanged, middleware, protocol,
+  interface count, frequency, complexity driver), the Tech Dev columns (object name, middleware,
+  source and target system) and a planning-level person-day estimate. Reads prose, interface tables
+  and transcribed architecture diagrams. Use when building the effort estimate (call 1).
 metadata:
   owner: "sap-practice"
-  version: "0.1.0-draft"
+  version: "1.0.0"
   ledger_sections: "integrations"
 ---
 
-# Third-party integrations
+# Third-party integration modules
 
-> Draft authored without the old prompt text (section A of
-> third_party_integration_extraction_layer.py). TODO(port): diff against it when npc-dev is available.
+Ported from section (A) of the old scope prompt
+(third_party_integration_extraction_layer.py) and its Tech Dev structuring prompt.
 
-## What counts
-A NAMED system that is not SAP-branded and that the RFP says must exchange data with the SAP
-solution: time and attendance (Kronos, UKG), payroll providers, banks / payment platforms (SWIFT,
-host-to-host), tax engines (Vertex, ZATCA e-invoicing portals), procurement suites (Coupa), CRM
-(Salesforce), MES / LIMS / WMS, logistics carriers, e-commerce, BI / data lakes (Snowflake, AWS data
-lake), project-management systems (Primavera, MS Project), legacy ERP kept alongside S/4HANA,
-government portals. Sources: interface lists, system-landscape tables, "integration with ..."
-sentences, and `[EMBEDDED IMAGE]` diagram transcriptions (one line per edge: `A <-> B : detail`).
-The index lists table-scan candidates - check each, but decide on the text.
+## Where to look
+Read the whole RFP, not only an obviously-titled integration section. Integration modules,
+interface counts and complexity splits are VERY OFTEN shown only inside `[EMBEDDED IMAGE]` blocks
+(an integration architecture diagram) or `[EXTRACTED TABLE]` blocks, transcribed as lines like:
 
-## Never an integration
-- SAP-branded products (SuccessFactors, Ariba, Concur, IBP, BTP, Analytics Cloud, Solution
-  Manager): they are SAP scope (catalogue or non-catalogue), even when "integrated".
-- Middleware itself (SAP CPI / Integration Suite, MuleSoft, Boomi, PI/PO): record it in the
-  `middleware` field of the systems it carries, not as a row.
-- Protocols and formats (REST, SOAP, IDoc, SFTP, EDI as a format) without a named counterpart.
-- Systems the RFP only mentions as context, or that are being retired with no interface.
-- Generic "interfaces as required" with no system: that is the RICEFW interface count, owned by
-  scope-ricefw-fiori.
+    REST <-> SAP FI/CO : Real-time RFC interfaces (SAP side)
+    Coupa <-> SAP (Treasury / Cash / Bank)
+    Data Lake (AWS) <-> SAP (reporting feeds)
 
-## Rules
-- One row per system. A system named in a table, a diagram and a paragraph is ONE row with the
-  richest facts; several interfaces to one system raise `interface_count`, not rows.
-- Keep the client's system name exactly; put the vendor product in `functionality` if it helps.
-- `direction`: inbound (to SAP), outbound (from SAP), bidirectional, or unknown.
-- `sap_modules`: the SAP side as the RFP or diagram labels it (FI, MM, HCM, Treasury ...).
-- `is_project_management`: true for project / portfolio management systems (Primavera, MS Project,
-  Jira, Planview) - they get a named lead in the staffing plan.
-- Evidence: the sentence, table row or diagram line naming the system and the integration need,
-  verbatim, with file and page.
+Treat these blocks with the same rigor as prose and do not skip them. `/rfp/index.md` lists the
+deterministic table scan's third-party candidates - check every one, but decide on the RFP text.
 
-## Complexity and effort (person-days for the whole integration, build + test)
-| Complexity | Typical case | effort_days |
-|---|---|---|
-| Low | one-way file / flat interface, standard adapter, one object | 10-20 |
-| Medium | a few objects or both directions, mapping logic, scheduled | 20-40 |
-| High | real-time / event-driven, many objects, complex mapping, external certification (banks, tax authorities) | 40-60 |
-Scale above 60 only when the RFP lists many distinct interfaces to the same system (justify in
-`rationale`, max 500). `complexity_driver` names what drives it.
+## What qualifies
+Every THIRD-PARTY INTEGRATION MODULE or SYSTEM the RFP mentions: any external, non-SAP vendor
+product, tool or system that needs to be integrated with, or connected to, the client's SAP
+landscape - a tax engine, a transportation management system, a banking / payment gateway, a
+warehouse / WMS system, an e-commerce platform, a CRM, a document management system, an EDI / B2B
+gateway, an IoT / shop-floor system, a client's homegrown portal, a non-SAP cloud service (e.g.
+Coupa, Qlik, Wincos, Blancco). Do NOT invent an integration that is not evidenced.
+
+## What never qualifies
+- Any SAP-BRANDED product, even a separately deployed cloud / satellite system with its own
+  interface: SAP Ariba, SAP SuccessFactors, SAP Concur, SAP Fieldglass, SAP SAC, SAP Signavio, SAP
+  GRC, SAP CRM, BTP-hosted apps. SAP owns these - they are the non-catalogue track (catalogue-mapper)
+  or the Security / Analytics specialists. Anything carrying the SAP name is excluded here.
+- Functional modules within the S/4HANA core being implemented (FI, CO, MM, SD, PP, QM, TM ...).
+- Middleware itself (SAP Integration Suite / CPI, PI/PO, MuleSoft): it goes into the `middleware`
+  field of the systems it carries.
+- Bare protocols (REST, IDoc, SFTP) with no named counterpart system.
+
+## One row per system
+Consolidate at the SYSTEM level: a system named in a diagram, a table and a paragraph is ONE row
+with the richest facts; several interfaces to it raise `interface_count`. Keep the RFP's name.
+
+## Fields (use "" / "unknown" when the RFP does not evidence a fact - never guess)
+| Field | Content |
+|---|---|
+| `system` | the system's name as the RFP names it |
+| `functionality` | what the system is / does, as the RFP describes it |
+| `sap_modules` | SAP modules / processes / areas it integrates with |
+| `direction` | inbound (data into SAP), outbound (out of SAP), bidirectional, unknown - read arrow directions and "Inbound" / "Outbound" / "Bi-Directional" labels in diagrams |
+| `data_exchanged` | business objects flowing (sales orders, vendor invoices, stock movements) |
+| `middleware` | the platform this system is routed through ONLY when the RFP connects THIS system to it (a diagram line from the system to the middleware box); append the protocol in brackets when stated, e.g. "SAP Integration Suite (CPI) (REST)" |
+| `protocol` | REST, SOAP, OData, API, RFC/BAPI, IDoc, DB, file/SFTP, EDI ... as shown for this system |
+| `interface_count` | the RFP's stated number of interfaces for this system, else 1 |
+| `frequency` | real-time, batch/scheduled, or "" |
+| `complexity_driver` | what drives the estimate: interface count, direction, data volume / frequency, or "no complexity signal in RFP - baseline estimate" |
+| `source_system`, `target_system` | write the SAP side as "SAP S/4HANA (<SAP modules>)" (just "SAP S/4HANA" when none): inbound: source = system, target = SAP side; outbound: source = SAP side, target = system; bidirectional: source = "<system> / <SAP side>", target = "<SAP side> / <system>"; not stated: source = system, target = SAP side |
+| `complexity` | Low / Medium / High |
+| `is_project_management` | true for project / portfolio management systems (Primavera, MS Project, Jira ...) |
+| `effort_days`, `rationale` | see below |
+| `evidence` | verbatim RFP words (sentence, table row or diagram line) with file and page |
+
+## Effort (person-days, one plain number)
+None of these has a standard SAP Best Practice catalogue entry, so base the estimate on your own
+knowledge of typical effort for a comparable third-party / auxiliary system at a similar
+complexity: a simple REST / file-based interface costs far less than a real-time bidirectional
+interface touching several SAP modules. Name the driver in `complexity_driver` / `rationale` so the
+figure reads as auditable. When the RFP gives no complexity signal, still give your best
+planning-level estimate - never leave it blank. Policy band `third_party_integration`: 10-60 PD;
+go above 60 only with several stated interfaces to the same system (max 500).
 
 ## Output
-`ledger_write_integrations(rows=[...], mode="append")` with system, functionality, sap_modules,
-direction, data_exchanged, middleware, protocol, interface_count, frequency, complexity_driver,
-source_system, target_system, complexity, is_project_management, effort_days, rationale, evidence.
-No third-party integration in the RFP -> `rows=[]` with a none_reason naming what you checked.
-Fix and resend every rejected row.
+`ledger_write_integrations(rows=[...])`. No third-party integration in the RFP -> `rows=[]` with a
+none_reason naming what you checked. Fix and resend every rejected row; never drop one silently.
