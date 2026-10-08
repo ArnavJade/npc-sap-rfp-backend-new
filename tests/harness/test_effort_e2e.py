@@ -130,7 +130,12 @@ def test_effort_call_end_to_end(harness_env):
     ledger = ws.ledger.load()
     assert state["gaps"] == [], state["gaps"]
     assert ledger.rfp_profile.data.countries[0].code == "SA"
-    assert [r.scope_item_id for r in ledger.scope_items.rows] == ["J58"]
+    assert ledger.scope_items.rows[0].scope_item_id == "J58" and ledger.scope_items.rows[0].mapping_basis != "finance_core"
+    # the Finance core is completed deterministically after the agents (old Layer 2 rule)
+    core = [r for r in ledger.scope_items.rows[1:]]
+    assert core and all(r.mapping_basis == "finance_core" and r.lob == "Finance" for r in core)
+    assert {r.business_area for r in core} <= set(run.policy.catalogue.finance_core_business_areas)
+    assert len({r.scope_item_id for r in ledger.scope_items.rows}) == len(ledger.scope_items.rows)
     assert ledger.integrations.rows[0].system == "Kronos" and ledger.integrations.rows[0].written_by == "scope-integrations"
     assert ledger.basis.state == "empty" and ledger.basis.none_reason
     assert ledger.figures["fig"]["total_project_effort"].endswith("person-days")

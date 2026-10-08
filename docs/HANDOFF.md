@@ -1,6 +1,7 @@
 # Handoff — SAP RFP Agent PoC on Deep Agents (as of 2026-10-08)
 
-Read with `docs/IMPLEMENTATION_PLAN.md` (original plan, Claude-Agent-SDK based). This file records how the
+Read with `docs/IMPLEMENTATION_PLAN.md` (original plan, Claude-Agent-SDK based) and
+`docs/HARNESS_FIX_PLAN.md` (first live run: errors, fixes, skills parity, workbook-only call 2). This file records how the
 PoC **deviates** from that plan, what exists, and what is left.
 
 - New repo (this one): `C:\Users\arnav.jade\Desktop\NPC SAP Agent\npc-sap-rfp-backend-new`

@@ -67,7 +67,7 @@ def test_rejections(client, monkeypatch):
     buf = io.BytesIO()
     Workbook().save(buf)
     r = client.post("/proposals", files=[("workbook", ("old.xlsx", buf.getvalue(), "application/octet-stream"))])
-    assert r.status_code == 422 and "_bid" in r.text
+    assert r.status_code == 422 and "does not look like an effort workbook" in r.text
     assert client.get("/jobs/nope").status_code == 404
     assert client.get("/bids/nope").status_code == 404
     llm.set_model_factory(None)

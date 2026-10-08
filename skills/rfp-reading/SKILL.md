@@ -59,10 +59,15 @@ How to search:
    `ypercare`, `S/4HANA`, module codes, country names and codes - with `output_mode="content"`.
 3. Read each relevant page in full with `read_section`: a sentence lifted out of its table or
    section loses the country it belongs to.
-4. Never page through the whole document blindly, and never stop at the first hit: scope matrices
-   and phase lists often live in appendices, annexures and pricing tables.
-5. Treat a transcribed image exactly like the surrounding text, and walk every row of every
-   relevant table ([reference/reading-tables.md](reference/reading-tables.md)).
+4. Never stop at the first hit: scope matrices and phase lists often live in appendices,
+   annexures and pricing tables. When the RFP is under ~200,000 characters (see index.md), read
+   it ALL in consecutive ~10-page `read_section` ranges - the old pipeline scanned every chunk,
+   and the capability inventory is only as good as its coverage.
+5. Treat a transcribed image (`[EMBEDDED IMAGE ...]`) and PDF diagram text (between "Start of
+   picture text" / "End of picture text") exactly like the surrounding text, and walk every row of
+   every relevant table ([reference/reading-tables.md](reference/reading-tables.md)).
+6. Write `capabilities` in batches of at most 10 rows (`mode="append"`); write `timeline` as soon
+   as you have read the phase / wave / go-live text - do not leave it for the end.
 
 ## 2. Evidence
 

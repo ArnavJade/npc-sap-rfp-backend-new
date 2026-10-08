@@ -186,15 +186,33 @@ def _non_catalogue(v: Verdict, ctx: ValidationContext) -> None:
         v.errors.append(f"'{item.name}' is a catalogue module - map it to scope_items with catalogue_search")
     item.countries = _check_countries(item.countries, ctx, v)
     band = pol.effort_bands.get(item.effort_band)
-    if band is None:
-        v.errors.append(f"effort_band must be one of {sorted(pol.effort_bands)}")
-    elif not (0 < item.effort_days <= 500):
+    if band is None:   # e.g. 'M' or '': derive the band from kind + effort instead of rejecting the row
+        guessed = _guess_band(item, pol.effort_bands)
+        v.notes.append(f"effort_band {item.effort_band!r} is not a band key; set to '{guessed}' "
+                       f"(keys: {sorted(pol.effort_bands)})")
+        item.effort_band, band = guessed, pol.effort_bands[guessed]
+    if not item.effort_days or item.effort_days <= 0:
+        item.effort_days = float(band[0])
+        v.notes.append(f"effort_days missing; set to the '{item.effort_band}' band minimum {band[0]} PD")
+    if not (0 < item.effort_days <= 500):
         v.errors.append("effort_days must be > 0 and <= 500")
     elif not (band[0] <= item.effort_days <= band[1]):
         v.notes.append(f"{item.effort_days} PD is outside the '{item.effort_band}' band {band}; rationale required")
         if not item.rationale.strip():
             v.errors.append("effort outside its band needs a rationale")
     _check_evidence(v, ctx)
+
+
+def _guess_band(item: Any, bands: dict[str, Any]) -> str:
+    """The policy band an item most plausibly belongs to, from its kind and effort."""
+    if item.kind == "sap_module_no_bp" and "sap_module_no_best_practice" in bands:
+        return "sap_module_no_best_practice"
+    if "third" in (item.label or "").lower() and "third_party_integration" in bands:
+        return "third_party_integration"
+    light, standard = bands.get("sap_tool_light"), bands.get("sap_tool_standard")
+    if light and (not standard or (item.effort_days or 0) <= light[1]):
+        return "sap_tool_light"
+    return "sap_tool_standard" if standard else sorted(bands)[0]
 
 
 def _integrations(v: Verdict, ctx: ValidationContext) -> None:

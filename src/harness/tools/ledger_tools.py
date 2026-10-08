@@ -67,7 +67,9 @@ def write_rows(run: RunContext, agent: str, section: str, rows: list[Any], mode:
                 sec.written_by = sorted({*sec.written_by, agent})
                 sec.updated_at = utcnow()
                 return f"Recorded {section} as empty: {none_reason.strip()}", True
-            return f"{section} already has {len(sec.rows)} row(s); use mode='replace' to clear them.", False
+            # Not an error: the agent wanted "nothing more to add". Keep the rows; say how to clear them.
+            return (f"Nothing changed: {section} already has {len(sec.rows)} row(s), which are kept. "
+                    "(To record the section as empty instead, call again with mode='replace'.)"), True
 
         verdicts = validate(section, rows, run.validation(ledger))
         accepted = [v for v in verdicts if v.ok]

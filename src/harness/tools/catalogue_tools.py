@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 
 from harness.context import RunContext
 
+MAX_SEARCH_LIMIT = 100   # the largest Business Area (Sales | Order and Contract Management) has 53 items
+
 
 def _fmt_items(items: list[dict], limit: int = 40) -> str:
     lines = []
@@ -27,7 +29,7 @@ class _Search(BaseModel):
     lob: str = Field("", description="Optional exact LOB filter.")
     business_area: str = Field("", description="Optional exact Business Area filter.")
     countries: list[str] = Field(default_factory=list, description="ISO codes to report availability for.")
-    limit: int = Field(15, ge=1, le=60)
+    limit: int = Field(15, description="Max rows to return (1-100; larger values are capped).")
 
 
 class _Lookup(BaseModel):
@@ -49,8 +51,9 @@ def make_catalogue_tools(run: RunContext) -> list[BaseTool]:
 
     def catalogue_search(query: str = "", lob: str = "", business_area: str = "", countries: list[str] | None = None,
                          limit: int = 15) -> str:
+        limit = max(1, min(int(limit or 15), MAX_SEARCH_LIMIT))   # cap, never reject (Gemini asked for 100)
         hits = cat.search(query, lob or None, business_area or None, countries or [], limit)
-        return "scope_item_id | LOB | Business Area | Description\n" + _fmt_items(hits)
+        return "scope_item_id | LOB | Business Area | Description\n" + _fmt_items(hits, limit)
 
     def cross_map_lookup(module_name: str, countries: list[str] | None = None) -> str:
         entry = cat.resolve_module(module_name)
@@ -70,7 +73,9 @@ def make_catalogue_tools(run: RunContext) -> list[BaseTool]:
             label = " | ".join(x for x in (f.lob or "(any LOB)", f.business_area, f.description_filter,
                                            f.component_filter) if x)
             blocks.append(f"\nFilter [{label}] -> {len(items)} scope item(s):\n" + _fmt_items(items, 60))
-        blocks.append("\nKeep only the items the RFP actually asks for; do not take a whole filter blindly.")
+        blocks.append(f"\nTo map it, call map_scope_area(module_name='{entry.module_name}', capability_refs=[...], "
+                      "countries=[...]): it writes every item above that is available (Business-Area granularity; "
+                      "the reviewer prunes lines in the workbook).")
         return "\n".join(blocks)
 
     def check_country_availability(scope_item_ids: list[str], countries: list[str]) -> str:
@@ -102,3 +107,158 @@ def make_catalogue_tools(run: RunContext) -> list[BaseTool]:
         StructuredTool.from_function(func=catalogue_business_areas, name="catalogue_business_areas",
                                      args_schema=_Areas, description="LOB -> Business Area map with item counts."),
     ]
+
+
+# ------------------------------------------------------------------------------ deterministic mapping
+class _MapArea(BaseModel):
+    capability_refs: list[str] = Field(description="row_ids of the capabilities this mapping serves, e.g. ['cap-3'].")
+    module_name: str = Field("", description="A cross-mapping rulebook module name (e.g. 'Sales & Distribution (SD)', "
+                                             "'Controlling (CO)'): every item its filters select is mapped.")
+    lob: str = Field("", description="Instead of module_name: the catalogue LOB ...")
+    business_area: str = Field("", description="... and Business Area (empty = the whole LOB).")
+    description_contains: str = Field("", description="Optional: only items whose description contains this text.")
+    countries: list[str] = Field(default_factory=list, description="ISO codes; empty = every in-scope country.")
+    status: str = Field("in_scope", description="in_scope | optional | excluded_existing")
+    mapping_basis: str = Field("", description="cross_map | catalogue_search | finance_core (default from the call).")
+
+
+def make_mapping_tools(run: RunContext, agent: str) -> list[BaseTool]:
+    """`map_scope_area`: the old Layer 2/3 behaviour as one deterministic call. The mapper decides the
+    module / Business Area (judgement); the tool writes EVERY catalogue item it selects that is
+    available in the countries (no LLM transcription of 40 scope ids, no item dropped by guesswork),
+    merging with rows already written. Ported from module_matcher_layer2 index selection +
+    bp_mapper_layer3 (retain 100% of the baseline items, then the country-availability filter)."""
+    from bidcore.catalogue.crossmap import LobBaFilter
+    from bidcore.ledger.base import utcnow
+    from bidcore.ledger.sections_effort import ScopeItem
+
+    cat = run.catalogue
+    sensitive = set(run.policy.catalogue.sensitive_lobs)
+
+    def map_scope_area(capability_refs: list[str], module_name: str = "", lob: str = "", business_area: str = "",
+                       description_contains: str = "", countries: list[str] | None = None, status: str = "in_scope",
+                       mapping_basis: str = "") -> str:
+        status = status if status in ("in_scope", "optional", "excluded_existing") else "in_scope"
+        submodule, basis = "", mapping_basis
+        if module_name.strip():
+            entry = cat.resolve_module(module_name)
+            if entry is None:
+                hints = ", ".join(s.module_name for s in cat.crossmap.suggest(module_name)) or "none"
+                return f"No rulebook row named '{module_name}'. Closest: {hints}. Or give lob + business_area."
+            if entry.is_others:
+                return (f"'{entry.module_name}' is an 'Others' row ({entry.others_label}): it has no catalogue items - "
+                        "write it with ledger_write_non_catalogue.")
+            filters, submodule, basis = list(entry.filters), entry.module_name, basis or "cross_map"
+        elif lob.strip():
+            filters, basis = [LobBaFilter(lob.strip(), business_area.strip(), description_contains.strip())], \
+                basis or "catalogue_search"
+        else:
+            return "Give module_name, or lob (+ business_area)."
+        if description_contains.strip() and module_name.strip():
+            filters = [LobBaFilter(f.lob, f.business_area, description_contains.strip(), f.component_filter)
+                       for f in filters]
+        basis = basis if basis in ("cross_map", "catalogue_search", "finance_core", "reviewer") else "catalogue_search"
+        stats = {"added": [], "merged": [], "unavailable": [], "sensitive": []}
+
+        def apply(ledger):
+            profile = ledger.rfp_profile.data
+            bid_countries = [c.code for c in profile.countries] if profile else []
+            codes = sorted({c.strip().upper() for c in (countries or []) if c and c.strip()}) or bid_countries
+            sec = ledger.scope_items
+            nums = [int(r.row_id.split("-")[-1]) for r in sec.rows if r.row_id.startswith("si-")
+                    and r.row_id.split("-")[-1].isdigit()]
+            next_id = max(nums, default=0) + 1
+            seen: set[str] = set()
+            for f in filters:
+                for item in cat.expand(f, codes):
+                    sid = item["scope_item_id"]
+                    if sid in seen:
+                        continue
+                    seen.add(sid)
+                    if item["lob"] in sensitive and not capability_refs:
+                        stats["sensitive"].append(sid)
+                        continue
+                    avail = item.get("available_in", codes) if codes else []
+                    if codes and not avail:
+                        stats["unavailable"].append(sid)
+                        continue
+                    twin = next((r for r in sec.rows if r.scope_item_id == sid and r.status == status), None)
+                    if twin is not None:
+                        twin.countries = sorted({*twin.countries, *avail})
+                        twin.capability_refs = sorted({*twin.capability_refs, *capability_refs})
+                        stats["merged"].append(sid)
+                        continue
+                    sec.rows.append(ScopeItem(
+                        row_id=f"si-{next_id}", scope_item_id=sid, lob=item["lob"], business_area=item["business_area"],
+                        description=item["description"], countries=list(avail), submodule=submodule,
+                        capability_refs=sorted(set(capability_refs)), mapping_basis=basis, status=status,
+                        written_by=agent))
+                    next_id += 1
+                    stats["added"].append(sid)
+            if sec.rows:
+                sec.state, sec.none_reason = "written", ""
+            sec.written_by = sorted({*sec.written_by, agent})
+            sec.updated_at = utcnow()
+            return codes
+
+        codes = run.ledger.update(apply, actor=agent, action="map scope area", section="scope_items",
+                                  detail=f"{module_name or lob + ' | ' + business_area} -> {capability_refs}")
+        run.trace.emit("ledger_write", agent, section="scope_items", rows=len(stats["added"]), mode="map_area",
+                       ok=True, saved=len(stats["added"]) + len(stats["merged"]), rejected=0, empty=False)
+        target = submodule or f"{lob}{' | ' + business_area if business_area else ''}"
+        parts = [f"{target}: added {len(stats['added'])} scope item(s)"
+                 + (f" ({', '.join(stats['added'][:60])})" if stats["added"] else "")
+                 + f", merged {len(stats['merged'])} already listed"]
+        if stats["unavailable"]:
+            parts.append(f"skipped {len(stats['unavailable'])} not available in {codes}: {', '.join(stats['unavailable'][:30])}")
+        if stats["sensitive"]:
+            parts.append(f"skipped {len(stats['sensitive'])} sensitive-LOB item(s): give capability_refs")
+        return "; ".join(parts) + "."
+
+    return [StructuredTool.from_function(
+        func=map_scope_area, name="map_scope_area", args_schema=_MapArea, handle_tool_error=True,
+        description="Map a capability to the catalogue at Business-Area / rulebook-filter granularity: writes EVERY "
+                    "scope item the rulebook module (or LOB + Business Area) selects that is available in the "
+                    "countries, merged with rows already written. Prefer this over typing scope ids one by one.")]
+
+
+def ensure_finance_core(run: RunContext) -> list[str]:
+    """Deterministic Finance-core guarantee (old module_matcher_layer2._ensure_finance_core_areas):
+    whenever a Finance scope item is in scope for a country, every policy finance-core Business Area
+    item available there is listed too. Runs after the agents, so a mapper that forgot it cannot
+    leave the core out. Returns the scope ids it added."""
+    from bidcore.catalogue.crossmap import LobBaFilter
+    from bidcore.ledger.sections_effort import ScopeItem
+
+    areas = list(run.policy.catalogue.finance_core_business_areas)
+    added: list[str] = []
+
+    def apply(ledger) -> None:
+        sec = ledger.scope_items
+        finance = [r for r in sec.rows if r.lob == "Finance" and r.status == "in_scope"]
+        if not finance or not areas:
+            return
+        profile = ledger.rfp_profile.data
+        bid_countries = [c.code for c in profile.countries] if profile else []
+        countries = sorted({c for r in finance for c in (r.countries or bid_countries)})
+        refs = sorted({ref for r in finance for ref in r.capability_refs})
+        listed = {r.scope_item_id for r in sec.rows}
+        nums = [int(r.row_id.split("-")[-1]) for r in sec.rows if r.row_id.split("-")[-1].isdigit()]
+        next_id = max(nums, default=0) + 1
+        for area in areas:
+            for item in run.catalogue.expand(LobBaFilter("Finance", area), countries):
+                avail = item.get("available_in", countries) if countries else []
+                if item["scope_item_id"] in listed or (countries and not avail):
+                    continue
+                sec.rows.append(ScopeItem(row_id=f"si-{next_id}", scope_item_id=item["scope_item_id"], lob="Finance",
+                                          business_area=item["business_area"], description=item["description"],
+                                          countries=list(avail), capability_refs=refs, mapping_basis="finance_core",
+                                          written_by="workflow", note="Finance core business area (policy)"))
+                listed.add(item["scope_item_id"])
+                added.append(item["scope_item_id"])
+                next_id += 1
+
+    run.ledger.update(apply, actor="workflow", action="finance core", section="scope_items")
+    if added:
+        run.trace.emit("finance_core", "", added=added)
+    return added

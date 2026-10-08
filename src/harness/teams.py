@@ -24,6 +24,7 @@ from harness import skills as skill_registry
 from harness.context import RunContext
 from harness.llm import chat_model
 from harness.middleware import LedgerGuardMiddleware, TraceMiddleware
+from harness.recovery import ModelRecoveryMiddleware, RfpGrepMiddleware
 from harness.tools.catalogue_tools import make_catalogue_tools
 from harness.tools.ledger_tools import make_orchestrator_tools, make_read_tools, make_write_tools
 from harness.tools.rfp_tools import make_rfp_tools
@@ -70,6 +71,13 @@ PERMISSIONS = [
 ]
 
 
+def _robustness(run: RunContext, name: str) -> list[Any]:
+    """Empty-reply retries, invented-tool-name repair and the page-aware RFP grep (harness.recovery).
+    Listed before TraceMiddleware so every retry is traced as its own model call."""
+    retries = int(run.policy.runtime.limits.get("empty_reply_retries", 2))
+    return [ModelRecoveryMiddleware(name, run.trace, retries), RfpGrepMiddleware(run.ws.rfp)]
+
+
 def _skill_paths(source: str, names: list[str]) -> str:
     return ", ".join(f"{source}{n}/SKILL.md" for n in names)
 
@@ -90,13 +98,14 @@ def _subagent(run: RunContext, name: str, role: str, skill_names: list[str], wri
         "tools": tools,
         "skills": [source],
         "permissions": PERMISSIONS,
-        "middleware": [LedgerGuardMiddleware(name, writes), TraceMiddleware(name, run.trace)],
+        "middleware": [LedgerGuardMiddleware(name, writes), *_robustness(run, name), TraceMiddleware(name, run.trace)],
     }
 
 
 def _extra_tools(run: RunContext, name: str) -> list[BaseTool]:
     if name == "catalogue-mapper":
-        return make_catalogue_tools(run)
+        from harness.tools.catalogue_tools import make_mapping_tools
+        return [*make_catalogue_tools(run), *make_mapping_tools(run, name)]
     if name.startswith("scope-"):
         return [t for t in make_catalogue_tools(run) if t.name == "catalogue_search"]
     if name == "wave-planner":
@@ -152,7 +161,7 @@ def build_team(run: RunContext, client: str, instructions: str = "") -> Any:
         skills=[source],
         backend=_backend(run),
         permissions=PERMISSIONS,
-        middleware=[TraceMiddleware(orch["name"], run.trace)],
+        middleware=[*_robustness(run, orch["name"]), TraceMiddleware(orch["name"], run.trace)],
         checkpointer=InMemorySaver(),      # a coverage retry continues the same orchestrator conversation
         name=orch["name"],
     )

@@ -6,7 +6,7 @@ POST /pipeline/generate/from-excel   user_metadata (+ instructions)             
 Input files come from SharePoint (`attachment_sharepoint_map` in user_metadata); the output is uploaded
 to the user_metadata folder and an Activity event is sent. Attachments are downloaded and checked
 before the job is queued, so bad input fails with a proper status: 400 invalid user_metadata, 422 no
-attachments / workbook without `_bid` / no model, 502 SharePoint errors. Default response:
+attachments / a workbook not in the effort-template layout / no model, 502 SharePoint errors. Default response:
 202 {job_id, status_url}; `?wait=true` returns the old body {"status": "success", "sharepoint": {...}}.
 """
 
@@ -26,7 +26,6 @@ from app.platform import (
     PlatformHeaders, RequestContext, SharePointError, UserMetadataError, download_attachment_from_sharepoint,
     report_effort_excel_generated, report_proposal_generated, upload_output_to_sharepoint,
 )
-from bidcore.render.workbook import WorkbookError
 from harness import llm
 from harness.workspace import BidWorkspace, new_bid_id, safe_name
 
@@ -120,13 +119,10 @@ async def generate_from_excel(request: Request, user_metadata: str = Form(...), 
     if len(books) != 1:
         raise HTTPException(422, f"expected exactly one reviewed .xlsx/.xlsm attachment, got {len(books)}")
     try:
-        bid_id = services.bid_of_workbook(books[0])
-    except WorkbookError as exc:
+        services.check_effort_workbook(books[0])
+    except services.ServiceError as exc:
         raise HTTPException(422, str(exc)) from None
-    try:
-        ws = BidWorkspace.open(bid_id, create=False)
-    except FileNotFoundError:
-        raise HTTPException(422, f"bid {bid_id} from the workbook is unknown on this server") from None
+    ws = services.proposal_workspace(books[0])   # linked call-1 bid, else built from the workbook alone
     moved = []
     for path in downloaded:
         target = ws.uploads / path.name

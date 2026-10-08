@@ -109,7 +109,9 @@ class NonCatalogueItem(Row):
     countries: list[str] = Field(default_factory=list)
     is_project_management: bool = False
     effort_days: float = Field(0.0, description="Person-days, inside the chosen policy effort band.")
-    effort_band: str = Field("", description="Key of policy effort.non_catalogue.effort_bands.")
+    effort_band: str = Field("", description="One of: sap_tool_light (5-20 PD), sap_tool_standard (20-60 PD), "
+                                             "sap_module_no_best_practice (40-150 PD), third_party_integration "
+                                             "(10-60 PD). Never S/M/L.")
     rationale: str = ""
 
 

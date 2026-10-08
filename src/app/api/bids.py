@@ -2,7 +2,8 @@
 
 POST /bids                      RFP files -> job (call 1)          -> 202 {job_id, bid_id, status_url}
 POST /bids/{bid_id}/proposal    reviewed workbook [+ RFP] -> job (call 2)
-POST /proposals                 same, bid id read from the workbook's hidden `_bid` sheet
+POST /proposals                 any effort workbook in the template layout [+ RFP] -> job (call 2); linked to
+                                its call-1 bid when the hidden `_bid` sheet names one on this server
 GET  /jobs/{job_id}             job record (status, stage, recent events, result)
 GET  /bids, /bids/{id}, /bids/{id}/ledger, /bids/{id}/files/{name}
 `?wait=true` on the POSTs blocks until the job ends and returns the job record.
@@ -94,8 +95,10 @@ async def create_bid(request: Request, files: list[UploadFile] = File(..., descr
 
 async def _proposal(request: Request, ws: BidWorkspace, workbook: Path, rfp: list[Path], instructions: str,
                     model: str, wait: bool) -> JSONResponse:
-    if not ws.ledger.exists():
-        raise HTTPException(409, f"bid {ws.bid_id} has no ledger - run the effort call first")
+    try:
+        services.check_effort_workbook(workbook)
+    except services.ServiceError as exc:
+        raise HTTPException(422, str(exc)) from None
 
     async def work(sink):
         return await services.run_proposal(ws, workbook, rfp, instructions, model or None, sink)
@@ -125,8 +128,8 @@ async def create_proposal(request: Request, bid_id: str, workbook: UploadFile = 
     book, rfp = await _split_proposal_files(ws, workbook, rfp_files)
     try:
         stamped = services.bid_of_workbook(book)
-    except WorkbookError as exc:
-        raise HTTPException(422, str(exc)) from None
+    except WorkbookError:
+        stamped = ws.bid_id       # no `_bid` sheet: the workbook alone drives call 2
     if stamped != ws.bid_id:
         raise HTTPException(422, f"this workbook belongs to bid {stamped}, not {ws.bid_id}")
     return await _proposal(request, ws, book, rfp, instructions, model, wait)
@@ -141,16 +144,18 @@ async def create_proposal_from_workbook(request: Request, workbook: UploadFile =
         services.ensure_models_configured("proposal", model or None)
     except services.ServiceError as exc:
         raise HTTPException(422, str(exc)) from None
+    if not (workbook.filename or "").lower().endswith(services.WORKBOOK_SUFFIXES):
+        raise HTTPException(422, "the reviewed workbook must be an .xlsx/.xlsm file")
     data = await workbook.read()
     scratch = BidWorkspace.open("incoming")
     probe = scratch.save_upload(safe_name(workbook.filename or "workbook.xlsx"), data)
     try:
-        bid_id = services.bid_of_workbook(probe)
-    except WorkbookError as exc:
+        services.check_effort_workbook(probe)
+        ws = services.proposal_workspace(probe)
+    except services.ServiceError as exc:
         raise HTTPException(422, str(exc)) from None
     finally:
         probe.unlink(missing_ok=True)
-    ws = _open(bid_id)
     await workbook.seek(0)
     book, rfp = await _split_proposal_files(ws, workbook, rfp_files)
     return await _proposal(request, ws, book, rfp, instructions, model, wait)
