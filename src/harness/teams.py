@@ -40,8 +40,9 @@ DESCRIPTIONS = {
                         "and the cross-mapping rulebook; routes SAP tools with no Best Practice content to "
                         "non_catalogue with an effort band. Writes scope_items, non_catalogue. Run after rfp-analyst.",
     "wave-planner": "Decides which wave delivers which scope: tags per-country scope lines, allocates each "
-                    "workstream's effort across waves, sets each wave's SAP Activate phase split and the duration "
-                    "of undated waves. Writes wave_plan. Run last.",
+                    "workstream's effort across waves, sets each wave's SAP Activate phase split, the duration "
+                    "of undated waves and how each wave's Data Migration table scales from the base table. "
+                    "Writes wave_plan. Run last.",
     "requirements-analyst": "Reads the RFP for what the client wants the response to contain: required sections, "
                             "per-section RFP excerpts, and which estimation detail may be disclosed. Writes "
                             "response_requirements. Run first.",

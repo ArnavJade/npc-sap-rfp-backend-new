@@ -101,6 +101,12 @@ not name, and mark all four `mm_compulsory: true` (the evidence rule exempts exa
 objects as usual with false. MM master data not in scope -> do not add them.
 
 ## Effort per phase (each value one of 0.5, 1, 2, 3, 4 - other values are snapped)
+You write ONE base table: the days for the FIRST (template) wave. Do not divide or multiply by the
+number of waves. The wave-planner sets how each later wave's table scales from yours (data volume,
+reused templates and programs, which objects the wave migrates) and the tool builds one table per wave.
+In `note`, record what the RFP says about volume per entity / site when it says anything (record
+counts, number of plants or company codes) - the wave-planner uses it.
+
 `func_spec` = functional spec / data template finalisation; `program_dev` = migration program
 development / changes; `iteration_1..3` = one mock-load iteration each (loading and changes after
 feedback); `cutover` = data cutover to production. Judge every object on its own merits from typical

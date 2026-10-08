@@ -134,6 +134,18 @@ The integrations agent read pages 16-17 only; most systems sit in the annexure o
 | Updated cross-mapping workbook (74 rows, 15 new modules, richer aliases); parquet + alias guide rebuilt | `assets/source`, `assets/catalogue/cross_mapping.parquet`, `skills/sap-scope-mapping/reference/cross-mapping-aliases.md` |
 | Rate-card "no row for X in SA" warning logged once per process (was 1,118 lines) | `effort/rate_card.py` |
 
+### Data Migration per wave
+Before: wave tables were copies of one table, then nudged at random cells by scope sync to match
+the grid. Now the ledger rows are the BASE (first-wave) table; the wave-planner writes
+`wave_plan.data_migration_waves` = `{wave, scale, key_scale?, objects?, rationale}` and
+`effort/workstreams.py::scale_dm_table` builds each wave's table: only that wave's objects, every
+cell x its factor, snapped to 0.5/1/2/3/4 (capped cells are noted). No entry -> scaled by the wave's
+`data_migration` allocation share relative to wave 1; neither -> copy (noted). The Data Migration
+person-days are split across waves exactly as the tables split them (`effort/waves.py`). A reviewer
+edit in wave N>1's table changes that wave only (`data_migration_wave` override); wave 1 edits change
+the base. Caveat: scope sync still rounds the grid row up to 0.5 FTE per month and moves table cells
+to match, which inflates very small tables.
+
 ## 7. Remaining plan (not in this branch), in priority order
 
 1. **Re-run ARASCO and diff against the reference** with `scripts/trace_view.py`: expect `model_empty`

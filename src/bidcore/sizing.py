@@ -101,6 +101,24 @@ def _apply_line_overrides(ledger: Ledger, effort: EffortModel) -> None:
     effort.tech_dev = rows
 
 
+def _apply_dm_wave_overrides(ledger: Ledger, effort: EffortModel) -> list[str]:
+    """Reviewer edits made in a later wave's Data Migration table (row id '<dm row>#<wave no.>', wave > 1)
+    change that wave's cell only - the ledger row is the base (wave 1) table."""
+    notes: list[str] = []
+    tables = effort.workstreams.data_migration
+    for o in ledger.overrides:
+        if not (o.applied and o.kind == "edit" and o.section == "data_migration_wave" and o.row_id):
+            continue
+        base, _, wave_no = o.row_id.partition("#")
+        index = int(wave_no) - 1 if wave_no.isdigit() else -1
+        row = next((r for r in tables[index] if r["row_id"] == base), None) if 0 <= index < len(tables) else None
+        if row is None:
+            notes.append(f"data migration edit {o.row_id} {o.field} no longer matches a table row; ignored")
+            continue
+        row[o.field] = o.new if o.field == "status" else float(o.new or 0.0)
+    return notes
+
+
 def _apply_grid_overrides(ledger: Ledger, plan: ResourcePlan, policy: Policy) -> list[str]:
     """Reviewer FTE edits on the resource grids: row id 'wave||role||location', field 'M<k>'."""
     notes: list[str] = []
@@ -144,7 +162,23 @@ def _wave_tags(ledger: Ledger, countries: list[str]) -> dict[str, str]:
     return tags
 
 
-def compute_effort(ledger: Ledger, wave_count: int, policy: Policy | None = None) -> EffortModel:
+def _dm_wave_inputs(ledger: Ledger, wave_names: list[str]) -> tuple[list, list[float]]:
+    """Per wave (timeline order): its data_migration_waves entry (or None) and the fallback scale - the
+    wave's data_migration allocation share relative to the first wave's (1.0 when there is none)."""
+    plan = ledger.wave_plan.data
+    fold = lambda s: " ".join(str(s).lower().split())  # noqa: E731
+    entries = {fold(d.wave): d for d in (plan.data_migration_waves if plan else [])}
+    per_wave = [entries.get(fold(name)) for name in wave_names]
+    shares = next((a.shares for a in (plan.allocations if plan else []) if a.workstream.strip() == "data_migration"), {})
+    folded = {fold(k): float(v) for k, v in shares.items()}
+    values = [folded.get(fold(name), 0.0) for name in wave_names]
+    base = values[0] if values and values[0] > 0 else 0.0
+    fallback = [round(v / base, 4) if base and v > 0 else 1.0 for v in values]
+    return per_wave, fallback
+
+
+def compute_effort(ledger: Ledger, wave_count: int, policy: Policy | None = None,
+                   wave_names: list[str] | None = None) -> EffortModel:
     policy = policy or get_policy()
     countries = bid_countries(ledger)
     factors = {k: float(v) for k, v in _overrides(ledger, "multiplication_factor").items()}
@@ -159,9 +193,11 @@ def compute_effort(ledger: Ledger, wave_count: int, policy: Policy | None = None
         for r in ledger.non_catalogue.rows
     ]
     tech_dev = compute_tech_dev(ledger.ricefw.data, ledger.fiori.data, ledger.integrations.rows, policy)
+    names = list(wave_names or [])[:max(wave_count, 1)]
+    dm_waves, dm_fallback = _dm_wave_inputs(ledger, names) if names else (None, None)
     tables = build_workstream_tables(
         ledger.data_migration.rows, ledger.basis.rows, ledger.security.rows, ledger.analytics.rows,
-        ledger.analytics_scope.data, max(wave_count, 1), policy)
+        ledger.analytics_scope.data, max(wave_count, 1), policy, dm_waves, dm_fallback)
     effort = EffortModel(rate_card_sheet=ledger.meta.rate_card_sheet, modules=modules,
                          non_catalogue=non_catalogue, tech_dev=tech_dev, workstreams=tables)
     _apply_line_overrides(ledger, effort)
@@ -203,7 +239,8 @@ def size_bid(ledger: Ledger, policy: Policy | None = None) -> SizingResult:
     sizing_effort = provisional.core_bp_effort + provisional.non_catalogue_effort + provisional.third_party_effort
     timeline = resolve_timeline(ledger.timeline.data, ledger.wave_plan.data, sizing_effort, countries, policy)
     notes += timeline.notes
-    effort = compute_effort(ledger, len(timeline.waves), policy)
+    effort = compute_effort(ledger, len(timeline.waves), policy, [w.name for w in timeline.waves])
+    notes += effort.workstreams.notes
 
     wave_effort, weights = allocate_waves(effort, timeline, ledger.wave_plan.data, policy)
     notes += wave_effort.flags
@@ -232,7 +269,8 @@ def size_bid(ledger: Ledger, policy: Policy | None = None) -> SizingResult:
                                      {titles[k]: totals[k] for k in CATEGORY_KEYS}, weights, policy)
     if policy.resourcing.scope_sync.enabled:
         notes += sync_scope_tables(plan, effort.workstreams, policy, seed=ledger.meta.bid_id)
-        totals = workstream_totals(effort.workstreams, policy)
+    notes += _apply_dm_wave_overrides(ledger, effort)
+    totals = workstream_totals(effort.workstreams, policy)
     hypercare = plan.hypercare_effort_days
     notes += _apply_grid_overrides(ledger, plan, policy)
     price_plan(plan, policy, daily_rate=settings.get("daily_rate_usd"))
