@@ -16,6 +16,7 @@ from typing import Any, Callable
 from pydantic import BaseModel
 
 from bidcore.catalogue.store import Catalogue
+from bidcore.countries import check_countries, to_iso2
 from bidcore.evidence import CorpusIndex
 from bidcore.ledger.models import SECTIONS, Ledger
 from bidcore.policy import Policy
@@ -74,15 +75,19 @@ def _check_evidence(v: Verdict, ctx: ValidationContext, required: bool = True, l
 
 
 def _check_countries(codes: list[str], ctx: ValidationContext, v: Verdict, label: str = "countries") -> list[str]:
-    allowed = set(ctx.policy.catalogue.allowed_countries)
-    cleaned, bad = [], []
-    for code in codes or []:
-        c = str(code).strip().upper()
-        (cleaned if c in allowed else bad).append(c)
-    if bad:
-        v.errors.append(f"{label}: {bad} not in the allowed ISO-2 list (non-catalogue countries go to "
-                        "rfp_profile.unsupported_countries)")
-    return sorted(set(cleaned))
+    """ISO-2 catalogue codes for whatever the agent sent ('KSA' -> 'SA'). A non-catalogue country is
+    dropped with a note; the row is rejected only when nothing but non-catalogue countries is left (it
+    belongs in rfp_profile.unsupported_countries) or a value names no known country."""
+    check = check_countries(codes, ctx.policy.catalogue.allowed_countries)
+    if check.unknown:
+        v.errors.append(f"{label}: {check.unknown} are not recognised countries - use ISO-2 codes from the "
+                        "allowed list (e.g. 'SA', 'AE', 'US')")
+    elif check.unsupported and not check.codes:
+        v.errors.append(f"{label}: {check.unsupported} are not catalogue countries (non-catalogue countries go "
+                        "to rfp_profile.unsupported_countries)")
+    elif check.unsupported or check.renamed:
+        v.notes.append(f"{label}: {check.note()}")
+    return sorted(check.codes)
 
 
 # ------------------------------------------------------------------------------ per section
@@ -90,7 +95,7 @@ def _rfp_profile(v: Verdict, ctx: ValidationContext) -> None:
     allowed = set(ctx.policy.catalogue.allowed_countries)
     kept = []
     for c in v.row.countries:
-        c.code = c.code.strip().upper()
+        c.code = to_iso2(c.code) or c.code.strip().upper()
         if c.code in allowed:
             kept.append(c)
         else:

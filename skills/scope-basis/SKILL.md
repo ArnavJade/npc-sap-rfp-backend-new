@@ -42,6 +42,18 @@ Nothing from general SAP knowledge; when unsure, leave it out. One row per activ
 activity twice in different words. Fiori scope counts only as "Fiori Launchpad / Gateway technical
 setup". No evidence -> `rows=[]` with a none_reason.
 
+## Procedure
+1. The pages in your brief are a starting point, not the boundary. Run ONE grep over /rfp/ (literal
+   words, `|` between them) for
+   `RISE with SAP|private cloud|hosting|landscape|system tier|transport management|transports|BTP|Integration Suite|CPI|Cloud Connector|Launchpad|Gateway|output management|print|backup|back-up|cutover|go-live`
+   and read (`read_section`) every page with a hit.
+2. Write each activity as soon as you have its evidence (batches of at most 10 rows) - long reading
+   before a single write has lost this whole section before. Before a later batch,
+   `ledger_read("basis")` and send only activities not saved yet; never the same activity again in
+   other words. A rejected row: fix it and resend THAT row only.
+3. `rows=[]` only when the grep found no Basis activity; the none_reason names the searches and pages
+   checked.
+
 ## Fields
 - `activity`: a concise name in the RFP's terms.
 - `status`: "Out of Scope" when the RFP gives the activity to someone other than the implementation
@@ -56,4 +68,4 @@ setup". No evidence -> `rows=[]` with a none_reason.
 - `evidence`: the exact RFP words stating the activity (verbatim substring), file and page.
 
 ## Output
-`ledger_write_basis(rows=[...])`. Fix and resend rejected rows.
+`ledger_write_basis(rows=[...])`. Fix and resend rejected rows only.

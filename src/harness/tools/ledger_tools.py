@@ -16,6 +16,7 @@ from langchain_core.tools import BaseTool, StructuredTool, ToolException
 from pydantic import BaseModel, Field, create_model
 
 from bidcore.ledger.base import RowSection, utcnow
+from bidcore.ledger.identity import find_twin, merge_into
 from bidcore.ledger.models import SECTIONS, Ledger
 from bidcore.ledger.overlap import find_overlaps
 from bidcore.ledger.validate import Verdict, validate
@@ -54,51 +55,55 @@ def _report(section: str, saved: list[str], rejected: list[Verdict], notes: list
 # ------------------------------------------------------------------------------ writes
 def write_rows(run: RunContext, agent: str, section: str, rows: list[Any], mode: str = "append",
                none_reason: str = "") -> str:
+    """Upsert `rows` into `section`. A row with the row_id of a saved row replaces that row (an explicit
+    correction); any other row that matches a saved one by the section's identity (bidcore.ledger.identity)
+    is merged into it instead of being added again, so resending a batch never duplicates. There is no
+    'replace all': rows are removed only with delete_rows (the third live run wiped 34 of 36 capabilities
+    by sending single-row corrections with mode='replace')."""
     spec = SECTIONS[section]
-    stats = {"saved": 0, "rejected": 0, "reasons": []}
+    stats = {"saved": 0, "merged": 0, "rejected": 0, "reasons": []}
+    mode_note = ("mode='replace' is not supported: rows were matched to the saved ones (give row_id to "
+                 "correct one; delete_rows removes rows)") if mode not in ("", "append") else ""
 
     def apply(ledger: Ledger) -> tuple[str, bool]:
         sec: RowSection = ledger.section(section)
         if not rows:
             if not none_reason.strip():
                 return "Give none_reason when there is nothing to record (and cite the RFP if you can).", False
-            if mode == "replace" or not sec.rows:
+            if not sec.rows:
                 sec.rows, sec.state, sec.none_reason = [], "empty", none_reason.strip()
                 sec.written_by = sorted({*sec.written_by, agent})
                 sec.updated_at = utcnow()
                 return f"Recorded {section} as empty: {none_reason.strip()}", True
-            # Not an error: the agent wanted "nothing more to add". Keep the rows; say how to clear them.
-            return (f"Nothing changed: {section} already has {len(sec.rows)} row(s), which are kept. "
-                    "(To record the section as empty instead, call again with mode='replace'.)"), True
+            # Not an error: the agent wanted "nothing more to add". Keep the rows.
+            return (f"Nothing changed: {section} already has {len(sec.rows)} row(s), which are kept "
+                    "(delete_rows removes rows you no longer want)."), True
 
         verdicts = validate(section, rows, run.validation(ledger))
         accepted = [v for v in verdicts if v.ok]
         rejected = [v for v in verdicts if not v.ok]
         notes = [f"row {v.index + 1}: {n}" for v in verdicts for n in v.notes]
-        if mode == "replace" and accepted:
-            sec.rows = []
+        if mode_note:
+            notes.insert(0, mode_note)
         existing = {r.row_id: i for i, r in enumerate(sec.rows)}
-        fresh = [v for v in accepted if not v.row.row_id or v.row.row_id not in existing]
-        new_ids = iter(_next_ids(sec, spec.row_prefix, len(fresh)))
+        new_ids = iter(_next_ids(sec, spec.row_prefix, len(accepted)))
         saved: list[str] = []
         for v in accepted:
             row = v.row
             row.written_by = agent
-            if section == "scope_items" and not row.row_id:
-                twin = next((r for r in sec.rows if r.scope_item_id == row.scope_item_id), None)
-                if twin is not None:   # same scope item from another capability: merge, never duplicate
-                    twin.countries = sorted({*twin.countries, *row.countries})
-                    twin.capability_refs = sorted({*twin.capability_refs, *row.capability_refs})
-                    twin.evidence = twin.evidence or row.evidence
-                    saved.append(f"{twin.row_id} (merged)")
-                    continue
-            if row.row_id and row.row_id in existing:
+            if row.row_id and row.row_id in existing:          # explicit correction of a saved row
                 sec.rows[existing[row.row_id]] = row
-            else:
-                if not row.row_id or row.row_id in existing:
-                    row.row_id = next(new_ids)
-                sec.rows.append(row)
-                existing[row.row_id] = len(sec.rows) - 1
+                saved.append(f"{row.row_id} (updated)")
+                continue
+            twin = find_twin(section, sec.rows, row)
+            if twin is not None:                               # the same item again: merge, never duplicate
+                changed = merge_into(twin, row)
+                saved.append(f"{twin.row_id} (merged{': ' + ', '.join(changed) if changed else ', no change'})")
+                stats["merged"] += 1
+                continue
+            row.row_id = next(new_ids)
+            sec.rows.append(row)
+            existing[row.row_id] = len(sec.rows) - 1
             saved.append(row.row_id)
         if sec.rows:
             sec.state, sec.none_reason = "written", ""
@@ -112,7 +117,7 @@ def write_rows(run: RunContext, agent: str, section: str, rows: list[Any], mode:
     message, ok = run.ledger.update(apply, actor=agent, action=f"write {section}", section=section,
                                    detail=f"{len(rows)} row(s), mode={mode}")
     run.trace.emit("ledger_write", agent, section=section, rows=len(rows), mode=mode, ok=ok,
-                   saved=stats["saved"], rejected=stats["rejected"], empty=not rows)
+                   saved=stats["saved"], merged=stats["merged"], rejected=stats["rejected"], empty=not rows)
     if stats["rejected"] or not ok:
         run.trace.emit("ledger_rejected", agent, section=section, rejected=stats["rejected"] or len(rows),
                        reasons=stats["reasons"] or [message[:600]])
@@ -161,13 +166,16 @@ def _write_tool(run: RunContext, agent: str, section: str) -> BaseTool:
     if spec.kind == "rows":
         args = create_model(
             f"Write_{section}", rows=(list[spec.model], Field(default_factory=list, description="Rows to save.")),
-            mode=(Literal["append", "replace"], Field("append", description="append/update by row_id, or replace all")),
+            mode=(str, Field("append", description="Always 'append'. A row matching a saved one is merged into "
+                                                   "it; give row_id to correct a saved row.")),
             none_reason=(str, Field("", description="Only with rows=[]: why the RFP has nothing here.")))
 
         def run_rows(rows: list | None = None, mode: str = "append", none_reason: str = "") -> str:
             return write_rows(run, agent, section, list(rows or []), mode, none_reason)
         func, desc = run_rows, (f"Save rows to the ledger section '{section}' (validated: rejected rows come "
-                                "back with reasons). Use rows=[] + none_reason when nothing applies.")
+                                "back with reasons). A row that matches one already saved is merged into it, "
+                                "never duplicated; give row_id to correct a saved row; delete_rows removes "
+                                "rows. Use rows=[] + none_reason when nothing applies.")
     else:
         args = create_model(
             f"Write_{section}", data=(spec.model | None, Field(None, description=f"The complete {section} object.")),

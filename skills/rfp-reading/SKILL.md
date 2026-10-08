@@ -244,11 +244,11 @@ Write only through the typed tools; check what you wrote with `ledger_read(secti
 1. `ledger_write_rfp_profile(data)` - `data` = `{client_name, engagement_type, engagement_reason,
    summary, countries: [{code, name, scope_type, evidence}], unsupported_countries: [names],
    evidence}`.
-2. `ledger_write_capabilities(rows, mode, none_reason)` - each row `{capability, sap_module_hint,
+2. `ledger_write_capabilities(rows, none_reason)` - each row `{capability, sap_module_hint,
    countries, scope_type, implementation_status, confidence, evidence, note}`. Leave `row_id`
-   empty for a new row; give the existing id to update one. `mode="append"` (default) adds rows,
-   `mode="replace"` rewrites the section. If the RFP truly names no SAP scope, call it with
-   `rows=[]` and a `none_reason` that cites the RFP.
+   empty for a new row; give the existing id to correct that one row (only that row changes - the
+   other saved rows are always kept). A row matching a saved capability is merged into it. If the
+   RFP truly names no SAP scope, call it with `rows=[]` and a `none_reason` that cites the RFP.
 3. `ledger_write_timeline(data)` - `data` = `{waves, units, sequencing, hypercare_required,
    hypercare_mode, numbering, source, reason, evidence}`; the field rules are in
    [reference/timeline-idioms.md](reference/timeline-idioms.md).

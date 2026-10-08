@@ -27,7 +27,29 @@ table, and security testing, cutover, go-live and hypercare support.
 Basis / infrastructure tasks (system set-up, transports, certificates, backups), network / hosting /
 cyber security, generic statements that the solution must be secure, functional approval workflows
 and release strategies (Ariba, SuccessFactors, purchasing), legal / financial compliance (audit,
-IFRS, tax).
+IFRS, tax), and the project's general testing, cutover or hypercare phases when the RFP does not
+state them for security specifically.
+
+## What the RFP's words are evidence for
+Each of these is its own row when the RFP says it (one row each, never repeated):
+- a GRC Access Control / Cloud IAG product in scope, or access-risk / SoD management -> GRC Access
+  Control / Cloud IAG implementation;
+- a GRC Process Control / Risk Management product in scope -> GRC Process Control implementation;
+- a single sign-on / Secure Login / identity product or requirement (in a licence or application list
+  too) -> Single sign-on implementation;
+- roles, authorisations, SoD or GRC-managed access stated for the new system -> Role and
+  authorisation design and build (the work every GRC access row depends on);
+- users of one entity / company / unit must not see another's data ("logical segregation", access
+  restricted by entity or table) -> Data-access restriction by entity / table.
+A GRC section of the RFP usually states several of these at once - read it line by line.
+
+## Procedure
+1. The pages in your brief are a starting point, not the boundary. Run ONE grep over /rfp/ (literal
+   words, `|` between them) for
+   `GRC|access control|access governance|process control|segregation|role|authoriz|authoris|single sign|secure login|identity`
+   and read (`read_section`) every page with a hit, licence / application lists included.
+2. Write as soon as you have the rows; before a later batch, `ledger_read("security")` and send only
+   activities not saved yet. A rejected row: fix it and resend THAT row only.
 
 ## STRICT EVIDENCE RULE
 List an activity ONLY when the RFP states it or puts the SAP product that delivers it in scope.
@@ -59,4 +81,6 @@ duplicates).
 - `evidence`: the exact RFP words (verbatim substring), file and page.
 
 ## Output
-`ledger_write_security(rows=[...])`. Fix any row the tool rejects; never drop a rejected row silently.
+`ledger_write_security(rows=[...])`. Fix any row the tool rejects and resend only that row; never
+drop a rejected row silently. `rows=[]` only when the grep found nothing; the none_reason names the
+searches and pages checked.

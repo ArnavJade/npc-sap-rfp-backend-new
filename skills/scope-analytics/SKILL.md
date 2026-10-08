@@ -29,7 +29,22 @@ ABAP / ALV / custom operational reports and forms (RICEFW - scope-ricefw-fiori),
 are part of a module's business process ("Perform Financial Reporting", "VAT Reporting", "MIS
 Reporting"), group-reporting consolidation functionality, non-SAP BI tools (Qlik, Power BI, Tableau -
 third-party integrations), marketing statements about the platform's analytics, project-management
-reporting.
+reporting, custom Fiori applications (scope-ricefw-fiori), and Finance close / consolidation process
+lines such as financial statements, disclosure or segment reporting (catalogue scope).
+
+## Procedure
+1. The pages in your brief are a starting point, not the boundary. Run ONE grep over /rfp/ (literal
+   words, `|` between them) for
+   `analytic|dashboard|KPI|business intelligence|Analytics Cloud|BW/4|BusinessObjects|Datasphere|CDS view|insight`
+   and read (`read_section`) every page with a hit. Per-module scope tables (annexures listing each
+   module's processes) are where the titled lines usually sit.
+2. In those tables, a line or area whose OWN title names analytics, dashboards or KPIs as the thing
+   delivered ("<Area> Analytics and Reporting", "<Area> Dashboards") is one Report row; a process
+   line that merely mentions reporting is not.
+3. Before a later batch, `ledger_read("analytics")` and send only objects not saved yet. A rejected
+   row: fix it and resend THAT row only.
+4. `rows=[]` only when the grep found nothing that qualifies; the none_reason names the searches and
+   pages checked.
 
 ## Evidence
 STRICT: list a deliverable ONLY when the RFP states it or puts its SAP product in scope; nothing from
@@ -61,4 +76,4 @@ or report is NOT a whole exclusion - mark that object Out of Scope instead. Sile
 ## Output
 `ledger_write_analytics(rows=[...])` (or `rows=[]` with a none_reason), and
 `ledger_write_analytics_scope(data={...})` only for an explicit whole-scope exclusion. Fix and resend
-rejected rows.
+rejected rows only.

@@ -34,6 +34,26 @@ lines like:
 Treat these blocks with the same rigor as prose and do not skip them. `/rfp/index.md` lists the
 deterministic table scan's third-party candidates - check every one, but decide on the RFP text.
 
+The richest source is often NOT the integration diagram but an inventory table of the client's
+existing / legacy applications (an annexure such as "Legacy applications details & integrations
+required", "Existing systems", "Application landscape"): one row per system with its function, the
+SAP modules it touches and often a number of interfaces. Every row of such a table that must be
+integrated with SAP is one integration row, with that number as `interface_count`.
+
+## Procedure
+1. The pages in your brief are a starting point, not the boundary. Run ONE grep over /rfp/ (literal
+   words, `|` between them) for
+   `integrat|interface|legacy|third party|third-party|3rd party|existing system|existing application|landscape|middleware`
+   and read (`read_section`) every page with a hit, tables and diagram text included.
+2. Write each source's systems as soon as you have read it (batches of at most 10 rows); do not hold
+   everything back until the end.
+3. Before each later batch, `ledger_read("integrations")`. A system already saved is NOT sent again
+   as a new row: to add facts from another source (interface count, middleware), resend that row
+   with its `row_id`. Names that differ only by case, punctuation, a company prefix or a suffix such
+   as "DB", "system" or "app" are the same system. A rejected row: fix it and resend THAT row only.
+4. `rows=[]` only when the grep found no third-party system anywhere; the none_reason names the
+   searches and pages checked.
+
 ## What qualifies
 Every THIRD-PARTY INTEGRATION MODULE or SYSTEM the RFP mentions: any external, non-SAP vendor
 product, tool or system that needs to be integrated with, or connected to, the client's SAP
@@ -82,8 +102,12 @@ complexity: a simple REST / file-based interface costs far less than a real-time
 interface touching several SAP modules. Name the driver in `complexity_driver` / `rationale` so the
 figure reads as auditable. When the RFP gives no complexity signal, still give your best
 planning-level estimate - never leave it blank. Policy band `third_party_integration`: 10-60 PD;
-go above 60 only with several stated interfaces to the same system (max 500).
+go above 60 only with several stated interfaces to the same system (max 500). Effort grows with the
+interface count but much less than proportionally - interfaces to one system share design, mapping,
+connectivity and test set-up. Illustrative only: 1 interface 10-15; about 5-10 interfaces 20-35;
+about 20 interfaces 50-70; 50 or more 100-160.
 
 ## Output
 `ledger_write_integrations(rows=[...])`. No third-party integration in the RFP -> `rows=[]` with a
-none_reason naming what you checked. Fix and resend every rejected row; never drop one silently.
+none_reason naming what you checked. Fix and resend every rejected row (only the rejected ones);
+never drop one silently.

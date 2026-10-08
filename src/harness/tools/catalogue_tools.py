@@ -6,12 +6,35 @@ valid Scope IDs with their country flags, so a misread table column cannot inven
 
 from __future__ import annotations
 
-from langchain_core.tools import BaseTool, StructuredTool
+from langchain_core.tools import BaseTool, StructuredTool, ToolException
 from pydantic import BaseModel, Field
 
+from bidcore.countries import check_countries
 from harness.context import RunContext
 
 MAX_SEARCH_LIMIT = 100   # the largest Business Area (Sales | Order and Contract Management) has 53 items
+
+
+def bid_countries(run: RunContext) -> list[str]:
+    profile = run.ledger.load().rfp_profile.data
+    return [c.code for c in profile.countries] if profile else []
+
+
+def resolve_countries(run: RunContext, countries: list[str] | None) -> tuple[list[str], str]:
+    """ISO-2 catalogue codes for the countries an agent passed ('KSA' -> 'SA'), defaulting to the bid's
+    in-scope countries, plus a note for the agent. Unknown values raise: an availability answer for a
+    code the catalogue does not have would read "available in NONE" and silently empty the mapping."""
+    check = check_countries(countries, run.policy.catalogue.allowed_countries)
+    if check.unknown:
+        raise ToolException(f"{check.unknown} are not recognised countries. Use ISO-2 codes; this bid's countries "
+                            f"are {bid_countries(run) or 'not recorded yet (rfp_profile)'}.")
+    codes = check.codes
+    note = check.note()
+    if not codes:
+        codes = bid_countries(run)
+        if countries and check.unsupported:
+            note += f"; using the bid's catalogue countries {codes} instead"
+    return codes, (f"[{note}]\n" if note else "")
 
 
 def _fmt_items(items: list[dict], limit: int = 40) -> str:
@@ -28,18 +51,19 @@ class _Search(BaseModel):
     query: str = Field("", description="Words describing the capability, e.g. 'credit management'.")
     lob: str = Field("", description="Optional exact LOB filter.")
     business_area: str = Field("", description="Optional exact Business Area filter.")
-    countries: list[str] = Field(default_factory=list, description="ISO codes to report availability for.")
+    countries: list[str] = Field(default_factory=list, description="ISO-2 codes to report availability for; "
+                                                                   "empty = the bid's countries.")
     limit: int = Field(15, description="Max rows to return (1-100; larger values are capped).")
 
 
 class _Lookup(BaseModel):
     module_name: str = Field(description="The client's module / capability name, e.g. 'FICO', 'SolMan'.")
-    countries: list[str] = Field(default_factory=list)
+    countries: list[str] = Field(default_factory=list, description="ISO-2 codes; empty = the bid's countries.")
 
 
 class _Avail(BaseModel):
     scope_item_ids: list[str]
-    countries: list[str]
+    countries: list[str] = Field(default_factory=list, description="ISO-2 codes; empty = the bid's countries.")
 
 
 class _Areas(BaseModel):
@@ -52,10 +76,15 @@ def make_catalogue_tools(run: RunContext) -> list[BaseTool]:
     def catalogue_search(query: str = "", lob: str = "", business_area: str = "", countries: list[str] | None = None,
                          limit: int = 15) -> str:
         limit = max(1, min(int(limit or 15), MAX_SEARCH_LIMIT))   # cap, never reject (Gemini asked for 100)
-        hits = cat.search(query, lob or None, business_area or None, countries or [], limit)
-        return "scope_item_id | LOB | Business Area | Description\n" + _fmt_items(hits, limit)
+        codes, note = resolve_countries(run, countries)
+        hits = cat.search(query, lob or None, business_area or None, codes, limit)
+        return note + "scope_item_id | LOB | Business Area | Description\n" + _fmt_items(hits, limit)
 
     def cross_map_lookup(module_name: str, countries: list[str] | None = None) -> str:
+        codes, note = resolve_countries(run, countries)
+        return note + _cross_map_lookup(module_name, codes)
+
+    def _cross_map_lookup(module_name: str, countries: list[str]) -> str:
         entry = cat.resolve_module(module_name)
         if entry is None:
             suggestions = cat.crossmap.suggest(module_name)
@@ -78,10 +107,10 @@ def make_catalogue_tools(run: RunContext) -> list[BaseTool]:
                       "the reviewer prunes lines in the workbook).")
         return "\n".join(blocks)
 
-    def check_country_availability(scope_item_ids: list[str], countries: list[str]) -> str:
-        table = cat.availability(scope_item_ids, countries)
-        codes = [c.upper() for c in countries]
-        lines = ["scope_item_id | " + " | ".join(codes)]
+    def check_country_availability(scope_item_ids: list[str], countries: list[str] | None = None) -> str:
+        codes, note = resolve_countries(run, countries)
+        table = cat.availability(scope_item_ids, codes)
+        lines = [note + "scope_item_id | " + " | ".join(codes)]
         known = cat.get(scope_item_ids)
         for sid in scope_item_ids:
             if sid not in known:
@@ -95,14 +124,14 @@ def make_catalogue_tools(run: RunContext) -> list[BaseTool]:
         return "\n".join(f"{r['lob']} | {r['business_area']} | {r['items']} items" for r in rows) or "unknown LOB"
 
     return [
-        StructuredTool.from_function(func=cross_map_lookup, name="cross_map_lookup", args_schema=_Lookup,
+        StructuredTool.from_function(func=cross_map_lookup, name="cross_map_lookup", args_schema=_Lookup, handle_tool_error=True,
                                      description="Resolve a client module name through the SAP cross-mapping rulebook "
                                                  "and list the catalogue scope items it points to."),
-        StructuredTool.from_function(func=catalogue_search, name="catalogue_search", args_schema=_Search,
+        StructuredTool.from_function(func=catalogue_search, name="catalogue_search", args_schema=_Search, handle_tool_error=True,
                                      description="Full-text search of the SAP Best Practice catalogue; returns valid "
                                                  "Scope IDs with country availability."),
         StructuredTool.from_function(func=check_country_availability, name="check_country_availability",
-                                     args_schema=_Avail,
+                                     args_schema=_Avail, handle_tool_error=True,
                                      description="Yes/No availability of scope items in the given countries."),
         StructuredTool.from_function(func=catalogue_business_areas, name="catalogue_business_areas",
                                      args_schema=_Areas, description="LOB -> Business Area map with item counts."),
@@ -110,14 +139,30 @@ def make_catalogue_tools(run: RunContext) -> list[BaseTool]:
 
 
 # ------------------------------------------------------------------------------ deterministic mapping
+def _known_refs(run: RunContext, refs: list[str]) -> tuple[list[str], str]:
+    """Keep the capability refs that exist (once the analyst has written capabilities); report the rest.
+    The third live run's mapper linked items to invented ids ('cap-co-1')."""
+    caps = run.ledger.load().capabilities.rows
+    if not caps:
+        return refs, ""
+    ids = {c.row_id for c in caps}
+    known = [r for r in refs if r in ids]
+    unknown = [r for r in refs if r not in ids]
+    note = (f"[capability_refs {unknown} do not exist and were left out; ids run {caps[0].row_id}.."
+            f"{caps[-1].row_id} - see ledger_read('capabilities')]
+") if unknown else ""
+    return known, note
+
+
 class _MapArea(BaseModel):
-    capability_refs: list[str] = Field(description="row_ids of the capabilities this mapping serves, e.g. ['cap-3'].")
+    capability_refs: list[str] = Field(default_factory=list, description="row_ids of the capabilities this mapping "
+                                                                  "serves, e.g. ['cap-3'] (ledger_read('capabilities')).")
     module_name: str = Field("", description="A cross-mapping rulebook module name (e.g. 'Sales & Distribution (SD)', "
                                              "'Controlling (CO)'): every item its filters select is mapped.")
     lob: str = Field("", description="Instead of module_name: the catalogue LOB ...")
     business_area: str = Field("", description="... and Business Area (empty = the whole LOB).")
     description_contains: str = Field("", description="Optional: only items whose description contains this text.")
-    countries: list[str] = Field(default_factory=list, description="ISO codes; empty = every in-scope country.")
+    countries: list[str] = Field(default_factory=list, description="ISO-2 codes; empty = every in-scope country.")
     status: str = Field("in_scope", description="in_scope | optional | excluded_existing")
     mapping_basis: str = Field("", description="cross_map | catalogue_search | finance_core (default from the call).")
 
@@ -135,7 +180,7 @@ def make_mapping_tools(run: RunContext, agent: str) -> list[BaseTool]:
     cat = run.catalogue
     sensitive = set(run.policy.catalogue.sensitive_lobs)
 
-    def map_scope_area(capability_refs: list[str], module_name: str = "", lob: str = "", business_area: str = "",
+    def map_scope_area(capability_refs: list[str] | None = None, module_name: str = "", lob: str = "", business_area: str = "",
                        description_contains: str = "", countries: list[str] | None = None, status: str = "in_scope",
                        mapping_basis: str = "") -> str:
         status = status if status in ("in_scope", "optional", "excluded_existing") else "in_scope"
@@ -159,11 +204,11 @@ def make_mapping_tools(run: RunContext, agent: str) -> list[BaseTool]:
                        for f in filters]
         basis = basis if basis in ("cross_map", "catalogue_search", "finance_core", "reviewer") else "catalogue_search"
         stats = {"added": [], "merged": [], "unavailable": [], "sensitive": []}
+        codes, note = resolve_countries(run, countries)
+        capability_refs, ref_note = _known_refs(run, capability_refs or [])
+        note += ref_note
 
         def apply(ledger):
-            profile = ledger.rfp_profile.data
-            bid_countries = [c.code for c in profile.countries] if profile else []
-            codes = sorted({c.strip().upper() for c in (countries or []) if c and c.strip()}) or bid_countries
             sec = ledger.scope_items
             nums = [int(r.row_id.split("-")[-1]) for r in sec.rows if r.row_id.startswith("si-")
                     and r.row_id.split("-")[-1].isdigit()]
@@ -199,13 +244,24 @@ def make_mapping_tools(run: RunContext, agent: str) -> list[BaseTool]:
                 sec.state, sec.none_reason = "written", ""
             sec.written_by = sorted({*sec.written_by, agent})
             sec.updated_at = utcnow()
-            return codes
 
-        codes = run.ledger.update(apply, actor=agent, action="map scope area", section="scope_items",
-                                  detail=f"{module_name or lob + ' | ' + business_area} -> {capability_refs}")
+        run.ledger.update(apply, actor=agent, action="map scope area", section="scope_items",
+                          detail=f"{module_name or lob + ' | ' + business_area} -> {capability_refs}")
+        ok = bool(stats["added"] or stats["merged"])
         run.trace.emit("ledger_write", agent, section="scope_items", rows=len(stats["added"]), mode="map_area",
-                       ok=True, saved=len(stats["added"]) + len(stats["merged"]), rejected=0, empty=False)
+                       ok=ok, saved=len(stats["added"]) + len(stats["merged"]), rejected=0, empty=False)
         target = submodule or f"{lob}{' | ' + business_area if business_area else ''}"
+        if not ok:   # a mapping that writes nothing is a failure the agent must see, never "ok, added 0"
+            if stats["unavailable"]:
+                why = (f"none of its {len(stats['unavailable'])} catalogue item(s) is available in {codes} "
+                       f"(e.g. {', '.join(stats['unavailable'][:8])}). The bid's countries are "
+                       f"{bid_countries(run)}; if those are right, this area has no Best Practice content there - "
+                       "map the capability to another Business Area or route it to non_catalogue.")
+            elif stats["sensitive"]:
+                why = "its items are in a sensitive LOB: give the capability_refs that ask for it."
+            else:
+                why = "the selection holds no catalogue items - check lob / business_area / description_contains."
+            raise ToolException(f"{note}NOTHING MAPPED for {target}: {why}")
         parts = [f"{target}: added {len(stats['added'])} scope item(s)"
                  + (f" ({', '.join(stats['added'][:60])})" if stats["added"] else "")
                  + f", merged {len(stats['merged'])} already listed"]
@@ -213,7 +269,7 @@ def make_mapping_tools(run: RunContext, agent: str) -> list[BaseTool]:
             parts.append(f"skipped {len(stats['unavailable'])} not available in {codes}: {', '.join(stats['unavailable'][:30])}")
         if stats["sensitive"]:
             parts.append(f"skipped {len(stats['sensitive'])} sensitive-LOB item(s): give capability_refs")
-        return "; ".join(parts) + "."
+        return note + "; ".join(parts) + "."
 
     return [StructuredTool.from_function(
         func=map_scope_area, name="map_scope_area", args_schema=_MapArea, handle_tool_error=True,

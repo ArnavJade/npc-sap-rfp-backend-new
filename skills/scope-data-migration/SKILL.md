@@ -39,6 +39,23 @@ master-data rows / sub-processes name the objects:
   approval rules, data quality / validation rules, replication, consolidation, mass processing, UI,
   governance processes.
 
+A migration section that only says "Masters" or "master data" names no object: the objects are
+listed elsewhere, usually in the per-module process tables or annexures. Go and find them there.
+
+## Procedure
+1. The pages in your brief are a starting point, not the boundary. Run ONE grep over /rfp/ (literal
+   words, `|` between them) for
+   `master data|masters|master record|migrat|conversion|data load|MDG`
+   and read (`read_section`) every page with a hit - each module's scope table usually has its own
+   master-data rows.
+2. Write each area's objects as soon as you have read them (batches of at most 10 rows); do not hold
+   everything back until the end.
+3. Before each later batch, `ledger_read("data_migration")` and send only objects not saved yet for
+   that area. A rejected row: fix it and resend THAT row only. A saved row to correct: resend it with
+   its `row_id`.
+4. `rows=[]` only when the grep found no object anywhere; the none_reason names the searches and
+   pages checked.
+
 ## Never qualifies
 - Transactional or balance data - open orders, open items, stock balances, GL balances, historical
   transactions - and process steps (orders, requisitions, confirmations, deliveries, invoices,
@@ -95,5 +112,6 @@ migration scope", "generic mention, no object named", "MDG capability, not a dat
 
 ## Output
 `ledger_write_data_migration(rows=[...])`, every row (except MM compulsory additions) with verbatim
-evidence (file, page). No master data object in migration scope -> `rows=[]` with a none_reason.
-Fix and resend rejected rows.
+evidence (file, page). The identity of a row is (`module`, `object`): the same object under two
+areas is two rows, the same object twice under one area is a duplicate. No master data object in
+migration scope -> `rows=[]` with a none_reason. Fix and resend rejected rows only.
