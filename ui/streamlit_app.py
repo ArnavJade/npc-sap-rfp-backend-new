@@ -46,21 +46,52 @@ def follow_job(job_id: str) -> dict | None:
         job = resp.json()
         status_box.info(f"Job {job_id}: **{job['status']}** - stage: {job.get('stage') or 'queued'}")
         lines = []
-        for event in job.get("events", [])[-15:]:
-            if event.get("kind") == "tool":
-                mark = "ok" if event.get("ok", True) else "ERROR"
-                lines.append(f"- `{event.get('agent')}` -> `{event.get('tool')}` ({mark}) {event.get('args') or ''}")
-            elif event.get("kind") in ("agent_start", "agent_end", "stage", "coverage", "output"):
-                lines.append(f"- {event['kind']} `{event.get('agent') or ''}` "
-                             f"{event.get('stage') or event.get('summary') or event.get('gaps') or event.get('file') or ''}")
+        for event in job.get("events", [])[-20:]:
+            kind, agent = event.get("kind"), event.get("agent") or ""
+            bad = kind in ("model_error", "tool_error", "stage_error", "run_error", "ledger_rejected") \
+                or event.get("ok") is False
+            mark = "**ERROR** " if bad else ""
+            if kind == "tool":
+                lines.append(f"- {mark}`{agent}` -> `{event.get('tool')}` ({event.get('ms', 0)} ms)")
+            elif kind == "model_call":
+                calls = ", ".join(c.get("name", "") for c in event.get("tool_calls", []))
+                lines.append(f"- `{agent}` model {event.get('ms', 0)} ms, tokens {event.get('input_tokens')}/"
+                             f"{event.get('output_tokens')}" + (f" -> {calls}" if calls else ""))
+            elif bad:
+                lines.append(f"- {mark}{kind} `{agent}` {event.get('error_type', '')} "
+                             f"{(event.get('error') or event.get('reasons') or '')}"[:400])
+            elif kind in ("agent_start", "agent_end", "stage", "stage_end", "coverage", "output", "run_end"):
+                lines.append(f"- {kind} `{agent}` {event.get('stage') or event.get('file') or event.get('gaps') or ''}")
         events_box.markdown("\n".join(lines) or "_waiting for the first agent step..._")
         if job["status"] in ("succeeded", "failed"):
             if job["status"] == "failed":
                 st.error(job.get("error") or "job failed")
+                if job.get("error_traceback"):
+                    with st.expander("Traceback"):
+                        st.code(job["error_traceback"])
+                diagnostics(job["bid_id"])
                 return None
             status_box.success(f"Job {job_id} finished.")
+            diagnostics(job["bid_id"])
             return job
         time.sleep(POLL_SECONDS)
+
+
+def diagnostics(bid_id: str) -> None:
+    """Per-agent calls / tokens / errors and every failure point of the bid's runs."""
+    resp = api("GET", f"/bids/{bid_id}/trace/summary")
+    if resp.status_code != 200:
+        return
+    summary = resp.json()
+    with st.expander(f"Diagnostics - {len(summary.get('errors', []))} failure point(s)"):
+        st.write(summary.get("totals", {}))
+        st.dataframe([{"agent": name, **{k: v for k, v in stats.items() if k != "tools"}}
+                      for name, stats in summary.get("agents", {}).items()], use_container_width=True)
+        if summary.get("stages"):
+            st.dataframe(summary["stages"], use_container_width=True)
+        for error in summary.get("errors", []):
+            st.error(f"{error.get('kind')} {error.get('agent', '')} {error.get('tool', '')}: "
+                     f"{error.get('error_type', '')} {error.get('error') or error.get('result') or ''}"[:800])
 
 
 def download(bid_id: str, name: str, label: str) -> None:

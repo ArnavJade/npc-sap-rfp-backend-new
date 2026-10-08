@@ -4,13 +4,35 @@ from __future__ import annotations
 
 import hashlib
 import os
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from langchain_core.messages import BaseMessage
 
 from bidcore.ledger.models import Ledger, SourceFile
 from harness.context import RunContext
+from harness.observability import bind, error_info
+
+
+def staged(run: RunContext, name: str, fn: Callable[[Any], Awaitable[dict]]) -> Callable[[Any], Awaitable[dict]]:
+    """A workflow node with observability: stage start / end with duration, the stage bound into
+    every log record and trace event inside it, and any failure recorded with its traceback
+    (stage_error) before it propagates."""
+    async def node(state: Any) -> dict:
+        started = time.time()
+        with bind(stage=name):
+            run.trace.emit("stage", "", stage=name)
+            try:
+                result = await fn(state)
+            except Exception as exc:
+                run.trace.emit("stage_error", "", stage=name, ms=int((time.time() - started) * 1000), **error_info(exc))
+                raise
+            run.trace.emit("stage_end", "", stage=name, ms=int((time.time() - started) * 1000),
+                           updates=sorted((result or {}).keys()))
+            return result
+    node.__name__ = name
+    return node
 
 
 def message_text(message: BaseMessage | Any) -> str:

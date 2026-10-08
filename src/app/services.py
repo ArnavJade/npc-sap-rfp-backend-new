@@ -9,6 +9,8 @@ Both run the LangGraph workflow of their call inside the bid's workspace. Models
 
 from __future__ import annotations
 
+import logging
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
@@ -19,8 +21,10 @@ from bidcore.policy import get_policy
 from bidcore.render.workbook import read_bid_sheet
 from harness import llm
 from harness.context import RunContext
+from harness.observability import error_info, load_events, run_log, summarize
 from harness.workspace import BidWorkspace
 
+log = logging.getLogger(__name__)
 Sink = Callable[[dict[str, Any]], None]
 WORKBOOK_SUFFIXES = (".xlsx", ".xlsm")
 
@@ -67,14 +71,33 @@ def prepare_effort(ws: BidWorkspace, client_name: str, rate_card_sheet: str, mod
                               rate_card_sheet=rate_card_sheet, models=models))
 
 
+async def _observed(run: RunContext, call: str, work: Any, **detail: Any) -> dict[str, Any]:
+    """Run one call with its own trace/run.log, bracketed by run_start / run_end (duration + the
+    trace summary totals) or run_error (with traceback)."""
+    started = time.time()
+    with run_log(run.ws.bid_id, run.ws.trace):
+        run.trace.emit("run_start", "", call=call, models=llm.models_in_use(run.run_model), **detail)
+        try:
+            state = await work
+        except Exception as exc:
+            run.trace.emit("run_error", "", call=call, ms=int((time.time() - started) * 1000), **error_info(exc))
+            raise
+        totals = summarize(load_events(run.ws.trace))["totals"]
+        run.trace.emit("run_end", "", call=call, ms=int((time.time() - started) * 1000), **totals)
+        log.info("%s call finished in %.1fs: %s", call, time.time() - started, totals)
+        return state
+
+
 async def run_effort(ws: BidWorkspace, client_name: str, uploads: list[Path], run_model: str | None,
                      sink: Sink) -> dict[str, Any]:
     from workflows.effort import build_effort_workflow
 
     run = RunContext(ws=ws, team="effort", run_model=run_model, sink=sink)
     flow = build_effort_workflow(run)
-    state = await flow.ainvoke({"client_name": client_name, "uploads": [str(p) for p in uploads]},
-                               config={"configurable": {"thread_id": f"{ws.bid_id}-call1"}, "recursion_limit": 50})
+    state = await _observed(run, "effort", flow.ainvoke(
+        {"client_name": client_name, "uploads": [str(p) for p in uploads]},
+        config={"configurable": {"thread_id": f"{ws.bid_id}-call1"}, "recursion_limit": 50}),
+        files=[p.name for p in uploads])
     workbook = Path(state["workbook"])
     ledger = ws.ledger.load()
     return {"bid_id": ws.bid_id, "workbook": workbook.name, "gaps": state.get("gaps", []),
@@ -88,9 +111,10 @@ async def run_proposal(ws: BidWorkspace, workbook: Path, rfp_uploads: list[Path]
 
     run = RunContext(ws=ws, team="proposal", run_model=run_model, sink=sink)
     flow = build_proposal_workflow(run)
-    state = await flow.ainvoke({"workbook": str(workbook), "rfp_uploads": [str(p) for p in rfp_uploads],
-                                "instructions": instructions or ""},
-                               config={"configurable": {"thread_id": f"{ws.bid_id}-call2"}, "recursion_limit": 50})
+    state = await _observed(run, "proposal", flow.ainvoke(
+        {"workbook": str(workbook), "rfp_uploads": [str(p) for p in rfp_uploads], "instructions": instructions or ""},
+        config={"configurable": {"thread_id": f"{ws.bid_id}-call2"}, "recursion_limit": 50}),
+        files=[workbook.name, *(p.name for p in rfp_uploads)])
     document = Path(state["document"])
     return {"bid_id": ws.bid_id, "document": document.name, "missing_drafts": state.get("missing", []),
             "edits": len(state.get("edits", [])), "agent_summary": state.get("agent_summary", "")}

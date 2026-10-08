@@ -13,6 +13,7 @@ import traceback
 from typing import Any, Awaitable, Callable
 
 from app.jobs.store import JobRecord, JobStore, _now
+from harness.observability import bind
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +51,13 @@ class JobRunner:
         return record
 
     async def _run(self, job_id: str, work: Work) -> None:
+        record = self.store.get(job_id)
+        with bind(bid=record.bid_id if record else "-", stage="job"):
+            await self._run_bound(job_id, work)
+
+    async def _run_bound(self, job_id: str, work: Work) -> None:
         async with self.semaphore:
+            log.info("job %s started", job_id)
             self.store.update(job_id, status="running", started_at=_now())
 
             def sink(event: dict[str, Any]) -> None:
@@ -62,13 +69,16 @@ class JobRunner:
             try:
                 result = await work(sink)
             except JobFailed as exc:
+                log.error("job %s failed (%s): %s", job_id, exc.status, exc)
                 self.store.update(job_id, status="failed", finished_at=_now(), error=str(exc), error_status=exc.status)
                 return
             except Exception as exc:
-                log.error("job %s failed: %s\n%s", job_id, exc, traceback.format_exc())
+                log.exception("job %s failed", job_id)
                 self.store.update(job_id, status="failed", finished_at=_now(),
-                                  error=f"{type(exc).__name__}: {exc}"[:2000], error_status=500)
+                                  error=f"{type(exc).__name__}: {exc}"[:2000], error_status=500,
+                                  error_traceback=traceback.format_exc()[-6000:])
                 return
+            log.info("job %s succeeded", job_id)
             self.store.update(job_id, status="succeeded", finished_at=_now(), result=result, stage="done")
 
     async def wait(self, job_id: str, timeout: float | None = None) -> JobRecord:

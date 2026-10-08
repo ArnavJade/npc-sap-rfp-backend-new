@@ -196,3 +196,33 @@ async def get_file(bid_id: str, name: str) -> FileResponse:
     if not path.is_file():
         raise HTTPException(404, f"no output '{name}'")
     return FileResponse(path, filename=path.name)
+
+
+# --------------------------------------------------------------------------- observability
+
+@router.get("/bids/{bid_id}/trace")
+async def get_trace(bid_id: str, kind: str = "", agent: str = "", errors_only: bool = False,
+                    since: float | None = None, tail: int = Query(500, ge=1, le=20000)) -> dict:
+    """Run trace events, filterable: kind=model_call,tool (comma list), agent, errors_only, since (ts)."""
+    from harness.observability import load_events
+
+    ws = _open(bid_id)
+    kinds = {k.strip() for k in kind.split(",") if k.strip()} or None
+    events = load_events(ws.trace, kinds=kinds, agent=agent or None, errors_only=errors_only, since=since)
+    return {"bid_id": bid_id, "count": len(events), "events": events[-tail:]}
+
+
+@router.get("/bids/{bid_id}/trace/summary")
+async def get_trace_summary(bid_id: str) -> dict:
+    """Per-agent model calls / tokens / latency / tool and ledger errors, stage timings, failures."""
+    from harness.observability import load_events, summarize
+
+    return summarize(load_events(_open(bid_id).trace))
+
+
+@router.get("/bids/{bid_id}/logs")
+async def get_run_log(bid_id: str, tail: int = Query(500, ge=1, le=50000)) -> dict:
+    """The last `tail` lines of the bid's run.log (all log records of its runs)."""
+    path = _open(bid_id).trace / "run.log"
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines() if path.is_file() else []
+    return {"bid_id": bid_id, "lines": lines[-tail:]}

@@ -32,7 +32,8 @@ class JobRecord(BaseModel):
     started_at: str = ""
     finished_at: str = ""
     error: str = ""
-    error_status: int = 0                  # HTTP status a synchronous caller should see on failure
+    error_status: int = 0
+    error_traceback: str = ""              # last frames of the failure (full trace: trace/errors.jsonl)                  # HTTP status a synchronous caller should see on failure
     result: dict[str, Any] = Field(default_factory=dict)
     events: list[dict[str, Any]] = Field(default_factory=list)
     params: dict[str, Any] = Field(default_factory=dict)

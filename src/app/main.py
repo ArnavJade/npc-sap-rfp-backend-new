@@ -17,9 +17,9 @@ from app.jobs.store import JobStore  # noqa: E402
 from bidcore.paths import workspace_dir  # noqa: E402
 from bidcore.policy import get_policy  # noqa: E402
 from harness import llm  # noqa: E402
+from harness.observability import configure_logging  # noqa: E402
 
-logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(),
-                    format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+configure_logging()      # LOG_LEVEL / LOG_FORMAT / LOG_DIR - see harness.observability
 
 
 @asynccontextmanager

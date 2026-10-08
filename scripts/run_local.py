@@ -23,22 +23,31 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(ROOT / ".env")
 
+from harness.observability import configure_logging  # noqa: E402
+
+configure_logging()
+
 from app import services  # noqa: E402
 from harness import llm  # noqa: E402
 from harness.workspace import BidWorkspace, new_bid_id  # noqa: E402
 
 
 def printer(event: dict) -> None:
-    kind = event.get("kind")
-    if kind == "stage":
-        print(f"\n== {event.get('stage')}")
-    elif kind in ("agent_start", "agent_end"):
-        print(f"  [{event.get('agent')}] {kind.split('_')[1]} {event.get('summary', '')[:120]}")
-    elif kind == "tool":
-        mark = "" if event.get("ok", True) else "  !! " + str(event.get("result", ""))[:160]
-        print(f"    {event.get('agent')} -> {event.get('tool')} {event.get('args') or ''}{mark}")
-    elif kind in ("coverage", "output", "ingested", "edits"):
-        print(f"  {kind}: { {k: v for k, v in event.items() if k not in ('ts', 'kind', 'agent')} }")
+    """Live progress is printed by the 'trace' logger (harness.observability); nothing extra here."""
+
+
+def report(ws: BidWorkspace) -> None:
+    from harness.observability import load_events, summarize
+
+    summary = summarize(load_events(ws.trace))
+    print("\nRun summary:", summary["totals"])
+    for name, stats in summary["agents"].items():
+        print(f"  {name:<24} model calls {stats['model_calls']:>3}  tokens in/out {stats['input_tokens']}/"
+              f"{stats['output_tokens']}  tool calls {stats['tool_calls']:>3}  tool errors {stats['tool_errors']}  "
+              f"ledger rejections {stats['ledger_rejections']}")
+    if summary["errors"]:
+        print(f"  {len(summary['errors'])} failure point(s): python scripts/trace_view.py {ws.bid_id} --errors")
+    print(f"  trace: {ws.trace}  (events.jsonl, errors.jsonl, llm_calls.jsonl, run.log)")
 
 
 def _copy(ws: BidWorkspace, paths: list[str]) -> list[Path]:
@@ -58,7 +67,10 @@ async def effort(args) -> None:
     uploads = _copy(ws, args.rfp)
     services.prepare_effort(ws, args.client, sheet, llm.models_in_use(args.model))
     print(f"bid {ws.bid_id} -> {ws.root}")
-    result = await services.run_effort(ws, args.client, uploads, args.model, printer)
+    try:
+        result = await services.run_effort(ws, args.client, uploads, args.model, printer)
+    finally:
+        report(ws)
     print(f"\nworkbook: {ws.outputs / result['workbook']}")
     if result.get("gaps"):
         print(f"sections not produced: {result['gaps']}")
@@ -70,7 +82,10 @@ async def proposal(args) -> None:
     ws = BidWorkspace.open(bid_id, create=False)
     book = _copy(ws, [args.workbook])[0]
     rfp = _copy(ws, args.rfp or [])
-    result = await services.run_proposal(ws, book, rfp, args.instructions or "", args.model, printer)
+    try:
+        result = await services.run_proposal(ws, book, rfp, args.instructions or "", args.model, printer)
+    finally:
+        report(ws)
     target = ws.outputs / result["document"]
     print(f"\ndocument: {target}")
     if args.out:
