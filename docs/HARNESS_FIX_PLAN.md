@@ -107,7 +107,34 @@ Call 2 no longer needs the hidden `_bid` sheet or the call-1 workspace:
 Verified on both uploaded workbooks: the reference file reads as 195 lines / 6 LOBs, 29 Tech Dev rows,
 3 x 68 DM rows, 3 grids; the generated one as 19 lines, 5 Tech Dev rows, 9 Basis rows.
 
-## 6. Remaining plan (not in this branch), in priority order
+## 6. Second live run (arasco_2, gemini-2.5-flash) and the fixes it led to
+
+| Sheet | Run 1 | Run 2 | Reference |
+|---|---|---|---|
+| LOB sheets / scope items | 1 / 19 | 6 / 195 | 6 / 195 |
+| Integrations (named) | 0 | 6 (effort 0 -> rejected, resent) | 24 |
+| Data Migration objects | 0 | 0 ("RFP only broadly mentions 'Masters'") | 68 x 3 waves |
+| Basis | 9 | 0 (never written) | 6 |
+| Security | 0 | 2 | 5 |
+| Analytics | 0 | 0 | 2 |
+
+Root causes in `cfa695ac-app.log`: 84 warnings, 42 of them empty replies. Every empty reply came after
+the agent read the integration-diagram pages (16-17), and the nudge alone never recovered it: the
+same request got the same empty answer three times (`scope-basis` 6 runs, `scope-integrations` 6 runs).
+The data-migration and analytics agents recorded their sections empty after reading 1 and 13 pages.
+The integrations agent read pages 16-17 only; most systems sit in the annexure of legacy applications.
+
+| Fix | Where |
+|---|---|
+| Empty reply ladder: nudge -> thinking off (`reasoning_effort: disable`, Gemini) -> `tool_choice="any"` (a tool call is forced) -> fallback model (`LLM_MODEL_FALLBACK` / `models.fallback_model`) | `harness/recovery.py::ModelRecoveryMiddleware` |
+| Completion guard: a specialist that stops with a section still `pending`, or (RFP <= 200k chars) before reading 90 % of the pages, is sent back to its model with what is missing (3 times) | `SectionCompletionMiddleware` |
+| Reading coverage per agent; `read_next_pages` walks the RFP in order; `rows=[]` / no data is refused until the agent has read the RFP | `harness/context.py`, `tools/rfp_tools.py`, `tools/ledger_tools.py::empty_gate` |
+| `integration_candidates()`: table-scan hits, every diagram text block, list lines of integration / legacy pages; the write tool lists table-scan candidates no row covers; missing effort -> Low 10 / Medium 20 / High 40 PD per interface | `tools/integration_tools.py`, `validate.py` |
+| Skills for basis, security, analytics, data migration, integrations: mandatory detection procedure, signal words, typical counts, none_reason must name what was searched | `skills/scope-*/SKILL.md` |
+| Updated cross-mapping workbook (74 rows, 15 new modules, richer aliases); parquet + alias guide rebuilt | `assets/source`, `assets/catalogue/cross_mapping.parquet`, `skills/sap-scope-mapping/reference/cross-mapping-aliases.md` |
+| Rate-card "no row for X in SA" warning logged once per process (was 1,118 lines) | `effort/rate_card.py` |
+
+## 7. Remaining plan (not in this branch), in priority order
 
 1. **Re-run ARASCO and diff against the reference** with `scripts/trace_view.py`: expect `model_empty`
    followed by `model_retry` instead of `agent_end ""`, no grep over `/skills/`, 0 limit / invalid-tool errors.

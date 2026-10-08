@@ -9,7 +9,7 @@ exactly; this guide is for reasoning about names the lookup does not match verba
 
 | Module | Aliases | Resolves to |
 |---|---|---|
-| Project Systems (PS) | Project Systems, PS, Project Management | Others (SAP Module, but No Best Practises) - SAP tool/system, no catalogue scope items |
+| Project Systems (PS) | Project Systems, PS, Project Management, Project System, WBS, Network Planning | Others (SAP Module, but No Best Practises) - SAP tool/system, no catalogue scope items |
 | Investor Relations Management | Investor Relations, IR | Others (General Aspect) - SAP tool/system, no catalogue scope items |
 | IT Asset Disposition (ITAD) | ITAD, IT Asset Disposition | R&D/Engineering | Product Compliance [Component contains 'EHS'] |
 | Hyperscale ITAD | Hyperscale ITAD | R&D/Engineering | Product Compliance [Component contains 'EHS'] |
@@ -18,54 +18,68 @@ exactly; this guide is for reasoning about names the lookup does not match verba
 | MDS | Master Data Services | Others (EHS) - SAP tool/system, no catalogue scope items |
 | SAP Analytics Cloud (SAC) | SAC, Analytics Cloud, SAP Analytic Cloud | Others (SAP Reporting Tool) - SAP tool/system, no catalogue scope items |
 | SAP Solution Manager 7.2 | Solution Manager, SolMan | Others (SAP Tool) - SAP tool/system, no catalogue scope items |
-| Controlling (CO) | CO, Controlling, Cost Controlling, Management Accounting | Finance | Cost Management and Profitability Analysis |
-| Materials Management (MM) | MM, Materials Management, Material Management, Inventory Management | Sourcing and Procurement (whole LOB); Supply Chain | Inventory |
-| Procure to Pay | Procure-to-Pay, P2P, Purchase to Pay | Sourcing and Procurement (whole LOB); Supply Chain | Inventory |
-| Production Planning (PP) | PP, Production Planning, Production & Planning, Production and Planning, Manufacturing Planning, Shop Floor Control | Manufacturing | Production Planning; Manufacturing | Manufacturing Operations; Manufacturing | Manufacturing Options |
-| Quality Management (QM) | QM, Quality Management, Quality Assurance, Quality Control | Manufacturing | Quality Management |
-| Sales & Distribution (SD) | SD, Sales and Distribution, Sales & Distribution | Sales (whole LOB) |
+| Controlling (CO) | CO, Controlling, Cost Controlling, Management Accounting, Product Costing, COPA, Profitability Analysis, Overhead Cost Accounting | Finance | Cost Management and Profitability Analysis |
+| Materials Management (MM) | MM, Materials Management, Material Management, Inventory Management, Procurement, Purchasing, Source to Pay, S2P, MM-IM, Goods Movement | Sourcing and Procurement (whole LOB); Supply Chain | Inventory |
+| Procure to Pay | Procure-to-Pay, P2P, Purchase to Pay, Requisition to Pay, R2P | Sourcing and Procurement (whole LOB); Supply Chain | Inventory |
+| Production Planning (PP) | PP, Production Planning, Production & Planning, Production and Planning, Manufacturing Planning, Shop Floor Control, Manufacturing, Production, Discrete Manufacturing, Process Manufacturing, PP-PI, MRP, PPDS | Manufacturing | Production Planning; Manufacturing | Manufacturing Operations; Manufacturing | Manufacturing Options |
+| Quality Management (QM) | QM, Quality Management, Quality Assurance, Quality Control, Quality, Inspection, Quality Notification, QM in Procurement | Manufacturing | Quality Management |
+| Sales & Distribution (SD) | SD, Sales and Distribution, Sales & Distribution, Order to Cash, OTC, O2C, Order Management, Billing, Sales | Sales (whole LOB) |
 | Order to Cash | Order-to-Cash, O2C, OTC | Sales (whole LOB) |
-| Plant Maintenance (PM) | PM, Plant Maintenance | Asset Management | Maintenance Management |
-| Warehouse Management (WM) | WM, Warehouse Management | Supply Chain | Warehousing; Supply Chain | Advanced Warehousing |
-| Extended Warehouse Management (EWM) | EWM, Extended Warehouse Management | Supply Chain | Warehousing; Supply Chain [Description contains 'EWM'] |
-| Product Lifecycle Management (PLM) | PLM, Product Lifecycle Management | R&D/Engineering | Product Lifecycle Management |
-| Customer Service (CS) | CS, Customer Service, Field Service Management, Field Service | Service (whole LOB) |
+| Plant Maintenance (PM) | PM, Plant Maintenance, Enterprise Asset Management, EAM, Maintenance, Preventive Maintenance | Asset Management | Maintenance Management |
+| Warehouse Management (WM) | WM, Warehouse Management, Basic Warehouse Management, Inventory Management Warehouse, Stock Room Management | Supply Chain | Warehousing; Supply Chain | Advanced Warehousing |
+| Extended Warehouse Management (EWM) | EWM, Extended Warehouse Management, Advanced Warehousing, Warehouse Execution | Supply Chain | Advanced Warehousing; Supply Chain | Warehousing |
+| Product Lifecycle Management (PLM) | PLM, Product Lifecycle Management, PDM, Product Data Management, Recipe Management, Specification Management | R&D/Engineering | Product Lifecycle Management |
+| Customer Service (CS) | CS, Customer Service, Field Service Management, Field Service, Service Management, After-Sales Service, Installed Base | Service (whole LOB) |
 | Revenue Accounting & Reporting (RAR) | RAR, Revenue Accounting and Reporting, Revenue Recognition | Finance [Description contains 'Revenue'] |
-| Transportation Management (TM) | TM, Transportation Management, Transporation Management, Transporation | Supply Chain | Delivery and Transportation; Supply Chain | Advanced Transportation |
-| Logistics Execution (LE) | LE, Logistics Execution | Supply Chain | Warehousing; Supply Chain | Transportation |
-| Human Capital Management (HCM) | HCM, Human Capital Management, Human Resources, HR and Payroll, Payroll | Human Resources (whole LOB) |
+| Transportation Management (TM) | TM, Transportation Management, Transporation Management, Transporation, Freight Management, Shipment, Transportation Planning | Supply Chain | Delivery and Transportation; Supply Chain | Advanced Transportation |
+| Logistics Execution (LE) | LE, Logistics Execution | Supply Chain | Warehousing; Supply Chain | Advanced Warehousing; Supply Chain | Delivery and Transportation; Supply Chain | Advanced Transportation |
+| Human Capital Management (HCM) | HCM, Human Capital Management, Human Resources, HR and Payroll, Payroll, HR, Personnel Administration, Time Management | Human Resources (whole LOB) |
 | HR | Human Resources, HR | Human Resources (whole LOB) |
 | SAP BTP | BTP, Business Technology Platform | Others (SAP Technical Service) - SAP tool/system, no catalogue scope items |
 | Joule | SAP Joule, Joule AI | Others (SAP Technical Service) - SAP tool/system, no catalogue scope items |
 | SAP MDG | MDG, Master Data Governance, Master Data Management | Others (SAP other tool) - SAP tool/system, no catalogue scope items |
-| SAP GRC | GRC, Governance Risk and Compliance | Others (SAP other tool) - SAP tool/system, no catalogue scope items |
+| SAP GRC | GRC, Governance Risk and Compliance, Access Control, Process Control, IAG | Others (SAP other tool) - SAP tool/system, no catalogue scope items |
 | SAP Signavio | Signavio, Process Mining, Process Insights | Others (SAP Process tool) - SAP tool/system, no catalogue scope items |
-| SAP Ariba | Ariba | Sourcing and Procurement [Description contains 'Ariba'] |
+| SAP Ariba | Ariba, Strategic Sourcing, Guided Buying, Ariba Contracts, Ariba Buying | Sourcing and Procurement [Description contains 'Ariba'] |
 | SAP Concur | Concur, Travel and Expense, Expense Management | Others (Unclassified) - SAP tool/system, no catalogue scope items |
-| SAP SuccessFactors | SuccessFactors, SF, Employee Central | Others (Unclassified) - SAP tool/system, no catalogue scope items |
+| SAP SuccessFactors | SuccessFactors, SF, Employee Central, EC, ECP, Employee Central Payroll, Core HR | Others (Unclassified) - SAP tool/system, no catalogue scope items |
 | SAP IBP | IBP, Integrated Business Planning | Others (Unclassified) - SAP tool/system, no catalogue scope items |
 | SAP DMS | DMS, Document Management System | Others (Unclassified) - SAP tool/system, no catalogue scope items |
 | SAP EHS Management | EHS, Environment Health and Safety | R&D/Engineering | Product Compliance [Component contains 'EHS'] |
-| SAP Integration Suite | Integration Suite, PI/PO, SAP PI, SAP PO | Others (SAP Integration tool) - SAP tool/system, no catalogue scope items |
+| SAP Integration Suite | Integration Suite, PI/PO, SAP PI, SAP PO, CPI, Cloud Platform Integration | Others (SAP Integration tool) - SAP tool/system, no catalogue scope items |
 | SAP Logistics Business Network | LBN, Logistics Business Network | (all LOBs) [Description contains 'business network'] |
-| Transportation Planning & Execution | Transportation Planning and Execution, TP&E | Supply Chain | Transportation |
-| Transportation Charge Management | Freight Settlement, Freight Audit | Supply Chain | Transportation |
-| Cash Management | Cash and Liquidity Management, Cash Flow Management, Liquidity Management | Finance | Treasury Management [Description contains 'Cash'] |
+| Transportation Planning & Execution | Transportation Planning and Execution, TP&E | Supply Chain | Delivery and Transportation; Supply Chain | Advanced Transportation |
+| Transportation Charge Management | Freight Settlement, Freight Audit | Supply Chain | Advanced Transportation; Supply Chain | Delivery and Transportation |
+| Cash Management | Cash and Liquidity Management, Cash Flow Management, Liquidity Management, Bank Communication Management | Finance | Treasury Management [Description contains 'Cash'] |
 | Environment Management | Environmental Management | R&D/Engineering | Product Compliance [Component contains 'EHS'] |
 | Health & Safety Management | Health and Safety Management, EHS Health and Safety | R&D/Engineering | Product Compliance [Component contains 'EHS'] |
 | Incident Management | EHS Incident Management | R&D/Engineering | Product Compliance [Component contains 'EHS'] |
 | Management of Change | MOC | R&D/Engineering | Product Compliance [Component contains 'EHS'] |
 | Digital Access | SAP Digital Access | Others (Unclassified) - SAP tool/system, no catalogue scope items |
 | Work Clearance Management | WCM | Others (Unclassified) - SAP tool/system, no catalogue scope items |
-| Yard Logistics | Yard Management | Supply Chain | Warehousing; Supply Chain [Description contains 'EWM']; Supply Chain | Transportation |
+| Yard Logistics | Yard Management | Supply Chain | Warehousing; Supply Chain | Advanced Warehousing; Supply Chain | Delivery and Transportation; Supply Chain | Advanced Transportation |
 | Work Zone | SAP Work Zone | Others (SAP Technical UI Tool) - SAP tool/system, no catalogue scope items |
 | CX | SAP Customer Experience, Customer Experience | Others (SAP System) - SAP tool/system, no catalogue scope items |
 | EC | Employee Central | Others (SAP System) - SAP tool/system, no catalogue scope items |
 | ECP | Employee Central Payroll | Others (System Name. Not consider for BP) - SAP tool/system, no catalogue scope items |
 | SAP S/4 HANA | S/4HANA, S4, S/4 | Others (SAP System) - SAP tool/system, no catalogue scope items |
 | SAP Fiori | Fiori | Others (SAP Technical UI Tool) - SAP tool/system, no catalogue scope items |
-| Group Reporting | Consolidation, Financial Consolidation | Finance [Description contains 'Group Reporting'] |
-| Leasing | Lease Accounting, Lease Management | Finance [Description contains 'Lease'] |
-| Finance | Finance & Controlling, FICO, Financial Management, Financial Accounting | Finance | Advanced Financial Operations; Finance | Accounting and Financial Close; Finance | Cost Management and Profitability Analysis |
+| Group Reporting | Consolidation, Financial Consolidation | Finance | Advanced Accounting and Financial Close [Description contains 'Group Reporting'] |
+| Leasing | Lease Accounting, Lease Management | Finance | Advanced Accounting and Financial Close [Description contains 'Lease'] |
+| Finance | Finance & Controlling, FICO, Financial Management, Financial Accounting, Record to Report, R2R, FI, Finance and Controlling, Central Finance, CFIN | Finance | Advanced Financial Operations; Finance | Accounting and Financial Close; Finance | Financial Operations |
 | Real Estate Management | RE Management, Flexible Real Estate Management, REFX | Finance | Real Estate Management |
-| Group Reporting/Consolidation | - | Finance | Advanced Accounting and Financial Close |
+| Available-to-Promise (aATP) | ATP, aATP, Advanced ATP, Available to Promise, Advanced Available-to-Promise, Order Promising, Backorder Processing, Product Allocation | Supply Chain | Advanced Order Promising; Supply Chain | Order Promising |
+| Service Parts Planning | SPP, Service Parts Planning, Spare Parts Planning, Service Parts Demand Planning | Supply Chain | Service Parts Planning |
+| Handling Unit Management | HU Management, Handling Unit Management, Handling Units | Supply Chain | Logistics Cross Topics |
+| Manufacturing Engineering (mBOM) | Production Engineering, Manufacturing Engineering, Manufacturing BOM, mBOM, Manufacturing Bill of Material | Manufacturing | Production Engineering |
+| Product Engineering (Variant Configuration) | Product Engineering, Variant Configuration, VC, Engineering BOM, EBOM, Product Structure Management, Configurable Model, Engineering Change Management, ECM | R&D/Engineering | Product Engineering |
+| Working Capital / Supply Chain Finance | Working Capital Management, Supply Chain Finance, Payables Financing, Receivables Financing, Taulia | Finance | Working Capital Management |
+| Contract Accounting & Billing (BRIM) | BRIM, Contract Accounting, FI-CA, FICA, Convergent Invoicing, Subscription Billing, Convergent Charging, Billing and Revenue Innovation Management | Finance | Billing and Revenue Innovation Management |
+| Global Trade & Risk Compliance | Global Trade Services, GTS, Global Trade, Customs Management, Embargo Control, Intrastat, Trade Compliance, Enterprise Risk and Compliance | Finance | Enterprise Risk and Compliance |
+| Sustainability / Product Footprint | Sustainability, Product Footprint Management, Carbon Accounting, Green Ledger, Environmental Footprint, ESG | Finance | Environmental Footprint Management |
+| Oil & Gas (Field Logistics) | Oil and Gas, Oil & Gas, Upstream, Downstream, Field Logistics, Hydrocarbon, Oil and Gas Production | Solutions for Specific Industries | Oil and Gas |
+| Automotive | Automotive, Digital Vehicle, Vehicle Management, Dealer Business Management, DBM | Solutions for Specific Industries | Automotive |
+| Business Workflow & Process Automation | Business Workflow, Workflow, Flexible Workflow, Situation Handling, Responsibility Management, Business Event Handling, Process Automation | Application Platform and Infrastructure | Process Management and Integration |
+| Data Migration | Data Migration, Legacy Data Migration, Data Conversion, Migration Cockpit, LTMC, Master Data Catalog, Enterprise Information Management, EIM | Database and Data Management | Enterprise Information Management |
+| Output Management | Output Management, Form Printing, Application Administration, System Administration, User Administration | IT Management | Administration and Usability |
+| Document & Reporting Compliance (DRC) | DRC, Document and Reporting Compliance, e-Invoicing, eInvoicing, Electronic Invoicing, Statutory Reporting, ZATCA, e-Document, SAF-T, Tax Compliance Reporting | Finance | Advanced Accounting and Financial Close [Description contains 'Document and Reporting Compliance'] |

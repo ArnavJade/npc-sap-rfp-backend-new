@@ -215,10 +215,20 @@ def _guess_band(item: Any, bands: dict[str, Any]) -> str:
     return "sap_tool_standard" if standard else sorted(bands)[0]
 
 
+# Planning-level person-days for an integration whose estimate the agent left out (it sent 0 for all six
+# rows in the second live run); inside the policy band third_party_integration (10-60).
+INTEGRATION_DEFAULT_DAYS = {"Low": 10, "Medium": 20, "High": 40}
+
+
 def _integrations(v: Verdict, ctx: ValidationContext) -> None:
     if not v.row.system.strip():
         v.errors.append("system name is required")
-    if not (0 < v.row.effort_days <= 500):
+    if not v.row.effort_days or v.row.effort_days <= 0:
+        days = INTEGRATION_DEFAULT_DAYS.get(v.row.complexity, 20) * max(int(v.row.interface_count or 1), 1)
+        v.notes.append(f"effort_days missing for {v.row.system}; set to {days} PD ({v.row.complexity} complexity "
+                       f"x {max(int(v.row.interface_count or 1), 1)} interface(s)) - give your own estimate if you have one")
+        v.row.effort_days = float(min(days, 500))
+    elif v.row.effort_days > 500:
         v.errors.append("effort_days must be > 0 and <= 500 (skill effort guide)")
     _check_evidence(v, ctx)
 

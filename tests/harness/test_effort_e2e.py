@@ -50,6 +50,7 @@ def effort_scripts() -> dict:
             turn(text="Ledger complete: profile, 1 capability, 1 wave, integrations, workstreams."),
         ],
         "rfp-analyst": [
+            turn(call("read_next_pages")),   # small RFP: read it all before writing
             turn(call("ledger_write_rfp_profile", data={
                 "client_name": "ACME Foods", "engagement_type": "greenfield", "summary": "S/4HANA Finance.",
                 "countries": [{"code": "SA", "name": "Saudi Arabia", "evidence": ev("SAP S/4HANA Finance for Saudi Arabia")}],
@@ -65,12 +66,14 @@ def effort_scripts() -> dict:
             turn(text="Wrote rfp_profile, capabilities (cap-1), timeline (1 wave)."),
         ],
         "scope-integrations": [
+            turn(call("read_next_pages")),   # small RFP: read it all before writing
             turn(call("ledger_write_integrations", rows=[{
                 "system": "Kronos", "functionality": "Time and attendance", "middleware": "SAP CPI",
                 "effort_days": 20, "evidence": ev("integrate with Kronos for time and attendance")}])),
             turn(text="1 integration."),
         ],
         "scope-ricefw-fiori": [
+            turn(call("read_next_pages")),   # small RFP: read it all before writing
             turn(call("ledger_write_ricefw", data={"rows": [{"object_type": "Report", "no_of_objects": 12,
                                                              "evidence": ev("provide 12 custom reports")}],
                                                    "evidence": ev("provide 12 custom reports")}),
@@ -78,18 +81,22 @@ def effort_scripts() -> dict:
             turn(text="RICEFW 12 reports; no Fiori."),
         ],
         "scope-data-migration": [
+            turn(call("read_next_pages")),   # small RFP: read it all before writing
             turn(call("ledger_write_data_migration", rows=[{
                 "object": "Material Master", "sap_module": "MM", "evidence": ev("Data migration of material master")}])),
             turn(text="1 object."),
         ],
-        "scope-basis": [turn(call("ledger_write_basis", rows=[], none_reason="RFP is silent on Basis.")),
+        "scope-basis": [turn(call("read_next_pages")),
+                        turn(call("ledger_write_basis", rows=[], none_reason="RFP is silent on Basis.")),
                         turn(text="none")],
         "scope-security": [
+            turn(call("read_next_pages")),   # small RFP: read it all before writing
             turn(call("ledger_write_security", rows=[{"activity": "Role design", "effort_days": 15,
                                                       "evidence": ev("Role design and authorizations")}])),
             turn(text="1 activity."),
         ],
-        "scope-analytics": [turn(call("ledger_write_analytics", rows=[], none_reason="No analytics asked.")),
+        "scope-analytics": [turn(call("read_next_pages")),
+                            turn(call("ledger_write_analytics", rows=[], none_reason="No analytics asked.")),
                             turn(text="none")],
         "catalogue-mapper": [
             turn(call("ledger_write_scope_items", rows=[{"scope_item_id": "J58", "countries": ["SA"],
