@@ -1,7 +1,7 @@
 # Handoff — SAP RFP Agent PoC on Deep Agents (as of 2026-10-08)
 
 Read with `docs/IMPLEMENTATION_PLAN.md` (original plan, Claude-Agent-SDK based). This file records how the
-PoC **deviates** from that plan, what exists, and what is left. Nothing is committed to git yet.
+PoC **deviates** from that plan, what exists, and what is left.
 
 - New repo (this one): `C:\Users\arnav.jade\Desktop\NPC SAP Agent\npc-sap-rfp-backend-new`
 - Old agent (read-only source to port from): `..\clone\npc-sap-rfp-backend` (branch `npc-dev` @ `67b88e6`).
@@ -26,99 +26,53 @@ PoC **deviates** from that plan, what exists, and what is left. Nothing is commi
 | Calls | Two calls + human review: (1) RFP → ledger → effort workbook; (2) reviewed workbook (+RFP) → diff via hidden `_bid` sheet → ledger → YASH .docx. |
 | Wave effort | **Agent allocates, tools compute**: `wave-planner` writes `ledger.wave_plan` (item tags, per-workstream wave shares, per-wave phase split starting from SAP Activate .08/.18/.50/.14 relative, durations for undated waves); deterministic code turns it into person-days/FTE (largest remainder, exact sums). Replaces old heuristic `wave_attribution_layer4`. |
 | PDF parsing | `pymupdf4llm` default, pluggable (`INGEST_PDF_ENGINE=docling` optional extra). **AGPL licence — review before production.** |
-| Workbook | **Full parity** with today's 11 sheets (Summary of Project Effort, Functional Scope Estimation, Project Timeline grids+reconciliation, one sheet per LOB, Non Catalogue SAP Tools, Tech Dev Scope, Data Migration per wave, Basis, Security, Analytics) + hidden `_bid`. Built from a static `template.xlsx` (styles/headers/static formulas/prototype rows) + a small openpyxl filler. No agent-driven file editing. |
+| Workbook | **Full parity** with today's sheets (Summary of Project Effort, Functional Scope Estimation, Project Timeline grids+reconciliation, one sheet per LOB, Non Catalogue SAP Tools, Tech Dev Scope, Data Migration per wave, Basis, Security, Analytics) + hidden `_bid`. Written directly by an openpyxl filler ported from the old writers (the prototype-row template idea was dropped: the old sheets are too heterogeneous). No agent-driven file editing. |
 | Word | **Full 42-section outline**, `docxtpl` template derived from `YASH_RFP_Template.docx`; narrative sections drafted in parallel by `section-writer` subagents as figure-free Markdown with `{{fig:..}}/{{table:..}}/{{diagram:..}}` placeholders resolved from the ledger. |
 | Rate card | Sum all 5 phases (old behaviour); the SAP BP sheet's own Total formula omits UAT — deliberately ignored. |
 | Platform | **Keep SharePoint (upload session > 4 MB) + Activity API.** Drop team model-config DB, KMS, S3 (local storage under `workspace/bids/<bid_id>/`). |
 | Temperature | `null` = provider default (Gemini 3.x loops at low temperatures). |
 
-## What exists
+## State (2026-10-08, branch `claude/keen-ride-iyeyve`)
 
-**Data/knowledge assets (done, verified)**
-- `scripts/build_assets.py`: `assets/source/*.xlsx` → `assets/catalogue/{scope_items,availability,cross_mapping}.parquet`
-  (445 items, 13 LOBs, 46 BAs, 43 countries, 60 cross-map rows) and `policy/rate_cards/bp_efforts.parquet`
-  (429 rows/sheet; all country key US); generates `skills/sap-scope-mapping/reference/{cross-mapping-aliases,catalogue-structure}.md`.
-- `policy/*.yaml` (commercials, effort, resourcing, timeline, catalogue [country codes quoted — YAML `NO`=false], workstreams,
-  workbook, runtime) + `src/bidcore/policy.py` typed loader with version hash. Porting agents added extra keys.
+All development items are done and the old agent (npc-dev @ 67b88e6, provided as a zip) has been
+ported where the plan said "port". Full suite: 157 tests pass (incl. LibreOffice recalculation of the
+workbook formulas). Data correctness has not been reviewed (see open items).
 
-**bidcore (deterministic, no LLM)**
-- `catalogue/` crossmap parser + in-memory SQLite FTS5 store (`catalogue_search`, availability, cross-map resolve/expand) — verified.
-- `ledger/` models (`base.py`, `sections_effort.py`, `sections_proposal.py`, `models.py` SECTIONS registry), `store.py`
-  (locked, atomic, audited, checkpoints), `validate.py` (evidence via `evidence.CorpusIndex`, countries, catalogue
-  existence/availability, covered codes, DM snapping/MM exemption, Basis 1–5, Security 1–120, analytics, timeline, wave plan),
-  `overlap.py` — 8 tests passing (`tests/ledger`).
-- Contracts: `effort/models.py`, `resourcing/models.py` (+ `WaveSpec`, `PassWeights`), `timeline/model.py`.
-- Ported by background agents (UNREVIEWED — check their tests, signatures vs. contracts):
-  `effort/{rate_card,catalogue_effort,techdev,workstreams,summary,waves}.py`, `timeline/resolve.py`,
-  `resourcing/{rounding,roles,grid,plan,rebalance,pricing,scope_sync}.py`, `ingest/{models,anchors,images,tables}.py`
-  (ingest is **incomplete**: `pdf.py`, `office.py`, `workspace.py` with `ingest()`/`read_section()` and its tests missing),
-  `app/platform/*` + `tests/platform_glue/*` (**DONE: 51 tests pass**; SharePoint upload session > 4,000,000 bytes,
-  5 MiB chunks; `SharePointError` → map to 502 and missing attachment ids → 422 in routes; module does not load `.env`,
-  so app start-up must call `load_dotenv()`). tests/effort, tests/timeline, tests/resourcing may be missing/incomplete.
-- Written by me, **untested**: `sizing.py` (full pipeline; imports agents' function names — reconcile signatures),
-  `figures.py` (placeholder keys), `outline.py`, `drafts.py` (draft_check).
+| Area | Where | State |
+|---|---|---|
+| Ingestion | `bidcore/ingest/{pdf,office,workspace}.py` | PDF/DOCX/PPTX/XLSX/CSV/TXT/MD -> `rfp/<slug>.md` with `<!-- page: N -->`, `index.md` (outline, tables, wave anchors, 3rd-party candidates) rebuilt from all files, `read_section`, `list_pages`, caption cache, `cache/prescan.json` |
+| Sizing | `bidcore/sizing.py` | honours reviewer overrides: catalogue phase cells / factor / wave / deletions, Tech Dev edits / deletions / additions, Summary %/rates, hypercare, grid FTE cells |
+| Workbook | `bidcore/render/workbook/{layout,filler,manifest}.py` | old layout cell for cell (`write_effort_workbook`, `*_scope.py` writers, Resources sheet + reconciliation); additions: hidden row-id columns, hidden `_bid`, rates + Total Project Cost row on the Summary; manifest `ledger/manifest-<render_id>.json`; `read_edits` (by row id, skips band/subtotal rows) + `apply_overrides` |
+| Docx | `bidcore/render/docx/` | YASH template (cover tokens, TOC refresh, heading-indent fix); old table builders (per-LOB functional scope, module-wise effort, delivery waves + landscape month grids / phase-skill fallback, combined staffing, role roster, cost, RACI); column-level disclosure + old header-cue filter for writer tables (`bidcore/disclosure.py`); matplotlib diagrams (not the old SVG renderer) |
+| Outline | `bidcore/outline.py` | client-required placement rules, `additional` section, resource/effort combine flip |
+| API / UI / CLI | `src/app/`, `ui/streamlit_app.py`, `scripts/run_local.py`, `Dockerfile` | jobs, bid routes, platform routes (SharePoint + Activity), UI over HTTP, local runner |
+| Skills | `skills/` | ported from the old prompts: six `scope-*` (sections A-G + per-area rules), client-requirements (requirements/excerpts, disclosure, steering), bid-review (verification gate, cost-gap, harmonisation, evaluator), proposal-writing references (indicative breakdown, phase plan, integrations); rfp-reading / sap-scope-mapping / proposal-outline ported earlier; estimating / wave-planning are new (no old equivalent) |
+| Ledger | `bidcore/ledger/sections_effort.py` | DM rows carry the RFP area (`module`), analytics rows `sap_product`; DM sheet label = old `module - domain - object` |
 
-**harness (Deep Agents)** — written, untested: `llm.py` (verified manually), `workspace.py`, `skills.py` (per-run skill
-bundles `/skills/<agent>/`, auto-discovery `skills/scope-*`, frontmatter `metadata.ledger_sections`), `context.py`
-(RunContext, Trace → `trace/events.jsonl` + progress sink), `middleware.py` (LedgerGuard, Trace), `teams.py`
-(build_team), `tools/{ledger,catalogue,rfp,effort,proposal}_tools.py`, `prompts/*.md`.
+Decisions taken in this session
+- YASH profile: the model may describe YASH qualitatively; specific claims (numbers, named
+  clients, partner tiers, certifications, offices) are banned unless RFP/presales supply them.
+- Disclosure defaults to withheld per category (old rule).
+- The old hidden 'Pipeline Data' sheet and the LLM-deduced BP ids for non-catalogue items are not
+  ported (call 2 reads the ledger; the non-catalogue BP-ID column shows "-").
 
-**workflows** — written, untested: `common.py`, `effort.py` (ingest→agents→verify↺→size→render),
-`proposal.py` (apply_edits→rfp→size→agents→verify↺→render).
-
-**skills** — partial (agents were mid-way): `rfp-reading`, `sap-scope-mapping` (SKILL.md + finance ref; lobs/guardrails refs
-may be missing), `proposal-outline` (SKILL.md, outline.yaml, sections/). Missing: `wave-planning`, `estimating`,
-`scope-integrations`, `scope-ricefw-fiori`, `scope-data-migration`, `scope-basis`, `scope-security`, `scope-analytics`,
-`proposal-writing` (+ yash-profile, service-catalog, placeholders refs), `client-requirements`, `bid-review`.
-Skill frontmatter `metadata` values must be strings. Source line ranges: plan's Skills table.
-
-## Background agents — all stopped (state at stop)
-- effort-port: all 7 modules written; smoke run + test suite NOT done (tests/effort, tests/timeline empty).
-- resourcing-port: modules written; was moving test helpers out of conftest; tests incomplete.
-- skills-effort: rfp-reading done; was writing sap-scope-mapping (lobs/guardrails/non-catalogue refs); remaining skills not started.
-- skills-proposal: proposal-outline done; proposal-writing, client-requirements, bid-review not written.
-- ingest-build: models/anchors/images/tables done; was starting office.py; pdf.py/workspace.py/tests missing.
-- platform-port: finished (51 tests pass).
-
-## What is left (in order)
-
-1. Check whatever the background agents finished (if not, redo from the briefs: effort/timeline port, resourcing port,
-   effort skills, proposal skills, ingestion, platform). Run `pytest tests -q`; fix contract mismatches with `sizing.py`.
-2. Finish ingestion: `bidcore/ingest/{pdf,office,workspace}.py` exporting `ingest(files, rfp_dir, *, pdf_engine, caption,
-   cache_dir) -> IngestResult`, `read_section(rfp_dir, file, page_from, page_to, heading, max_chars)`, `list_pages`,
-   `VISION_PROMPT`; markers exactly `<!-- page: N -->`; compact `index.md` (outline, tables, wave anchors, 3rd-party candidates).
-3. Rendering:
-   - `bidcore/render/workbook/template_builder.py` + `scripts/build_templates.py` → `assets/templates/template.xlsx`
-     (prototype rows per sheet; layout notes: styles.py has colours copied from old writers; old writers are in
-     `effort_calculator_layer4.py` `write_effort_workbook`, `_write_resource_plan_block`, `_write_resource_reconciliation_block`,
-     `_write_project_effort_summary_sheet`, and `*_scope.py` writers).
-   - `render_workbook(ledger, sizing, path, policy) -> Path` (filler; live formulas as old; hidden `row_id` column per table).
-   - `render/workbook/manifest.py`: `_bid` sheet (bid_id, render_id, ledger/policy version) + server-side
-     `ledger/manifest-<render_id>.json` of every input cell; `read_edits(workbook, ledger_dir)` and
-     `apply_overrides(ledger, edits)` (module effort/factor/wave/deleted/added rows → `ledger.overrides`; scope-sheet rows →
-     direct ledger edits; Summary %/hypercare → settings; grid cells → overrides; formula cells overwritten → conflicts).
-     NOTE `workflows/proposal.py` currently calls `read_edits(workbook, ledger/manifest.json)` — change to the ledger dir.
-   - `sizing.compute_effort`/`size_bid` must honour phase-field, deleted-row, tech-dev, hypercare-setting and grid overrides.
-   - `bidcore/render/docx`: template builder from `YASH_RFP_Template.docx` (has `{{CLIENT_NAME}}`, `{{DATE}}`, `{{YEAR}}`, TOC
-     field; set `updateFields`), one `{{p S_x_y }}` subdoc per outline section, markdown→subdoc (headings, lists, bold,
-     pipe tables), placeholder resolution, client-required sections appended after their anchor, disclosure filtering,
-     `render_proposal(ledger, sizing, drafts_dir, out, policy)`; diagrams (timeline Gantt via matplotlib, methodology, architecture).
-4. API (`src/app`): FastAPI `main.py`; jobs runner/store (asyncio tasks, semaphore, JSON records, progress from Trace sink);
-   routes `POST /bids` (multipart RFP files, client_name, rate_card_sheet, model) → job; `GET /jobs/{id}`;
-   `GET /bids/{id}`, `/bids/{id}/ledger`, `/bids/{id}/files/{name}`; `POST /bids/{id}/proposal` (reviewed xlsx [+RFP],
-   instructions) or bid_id read from `_bid`; platform routes `POST /pipeline/match/effort` and
-   `/pipeline/generate/from-excel` (user_metadata + SharePoint download/upload + Activity; 202 + `?wait=true`);
-   422 for workbooks without `_bid`; fail fast if no model configured.
-5. Streamlit UI (`ui/streamlit_app.py`): call-1 upload + progress + ledger summary + xlsx download; call-2 upload reviewed
-   xlsx + instructions + docx download; bid list. Reference: DeepAgent `app_streamlit.py` (zip in repo root, extracted copy
-   was in the session scratchpad).
-6. Tests: harness wiring with scripted fake models per agent (`harness.llm.set_model_factory`; pattern from DeepAgent
-   `tests/test_agent_e2e.py`), workflow e2e on a fixture ledger → real xlsx/docx, diff round-trip.
-7. Live smoke run once the user configures `LLM_MODEL` (check Gemini tool-schema handling of nested/nullable fields).
+## Open items
+1. **Data correctness (not reviewed, by request).** Observed on the fixture bid:
+   - scope sync more than doubles small workstreams (Security 35 -> 74 PD, Data Migration 52 -> 127
+     PD) because off-grain category cells are rounded UP to 0.5 FTE in every month - the old
+     `resource_scope_sync` does the same (`math.ceil`), so this is faithful old behaviour;
+   - programme roles (Program / Project Manager, Solution Architect ...) end up with FTE only in the
+     hypercare months on a small bid: the 8 % management envelope spread over many roles and months
+     rounds to 0 at the 0.5 grain.
+   Compare against the ARASCO reference workbook before trusting totals.
+2. Live smoke run once `LLM_MODEL` is set (check Gemini tool-schema handling of nested/nullable fields).
+3. Not built: evals (`evals/`), helm/CI; diagrams are matplotlib, not a port of `layer5_diagrams.py`.
 
 ## Gotchas
-- `tests/platform` would shadow stdlib `platform` → use `tests/platform_glue`.
+- `tests/platform` would shadow stdlib `platform` -> use `tests/platform_glue`.
 - `deepagents` SubAgent `tools` must always be given (otherwise parent tools are inherited); `skills` sources are
   directories containing skill folders (hence per-agent bundles).
 - Ledger write tools are per-section closures `ledger_write_<section>`; `delete_rows` restricted to own sections.
 - Proposal `write_draft` is the only way to write `/drafts/` (filesystem permissions deny raw writes outside `/notes/`).
+- The template's Heading 2 numbering carries a 10216-twip indent; the docx builder pins heading indents.
+- A non-editable install needs `ASSETS_DIR`/`POLICY_DIR`/`SKILLS_DIR` (set in the Dockerfile).

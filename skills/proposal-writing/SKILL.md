@@ -175,13 +175,12 @@ never a reason to disclose.
   phases and systems.
 
 ## YASH facts
-State nothing about YASH that `reference/yash-profile.md` or `reference/service-catalog.md` does
-not state. That covers experience, references, certifications, partner status, offices, delivery
-centres, headcount, awards, accelerators and tools.
-- Never write text that is inside square brackets in those files; brackets are fields presales has
-  not filled.
-- Lines marked `> TODO(presales): confirm` are unconfirmed drafts. Use them only as worded, with no
-  embellishment and no numbers.
+`reference/yash-profile.md` says what may be said about YASH: general, qualitative statements are
+allowed; specific claims are not. Never state a number about YASH (headcount, years, offices,
+customers), a named customer or reference, a partner tier, award, certification, named tool or
+office location unless the RFP or the presales instructions supply it. Name services only as
+`reference/service-catalog.md` words them. Make "why YASH" points qualitatively and tie each one to
+the client's need.
 
 ## Special sections
 - **Client-required sections** (`kind: narrative | indicative_breakdown | phase_plan`) and the

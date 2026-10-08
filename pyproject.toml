@@ -51,3 +51,6 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
 filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.setuptools.package-data]
+harness = ["prompts/*.md"]

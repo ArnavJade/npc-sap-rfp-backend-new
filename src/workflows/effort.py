@@ -103,7 +103,7 @@ def build_effort_workflow(run: RunContext):
         sizing = size_bid(ledger, run.policy)      # deterministic: identical to the sized figures
         safe = "".join(ch if ch.isalnum() else "_" for ch in ledger.meta.client_name).strip("_") or "Client"
         name = run.policy.workbook["file_name"].format(client=safe, timestamp=datetime.now().strftime("%Y%m%d_%H%M%S"))
-        path = render_workbook(ledger, sizing, run.ws.outputs / name, run.policy)
+        path = render_workbook(ledger, sizing, run.ws.outputs / name, run.policy, manifest_dir=run.ws.ledger.dir)
         run.ledger.update(lambda led: setattr(led.meta, "status", "effort_workbook_ready"), actor="workflow",
                           action="render", detail=path.name)
         run.trace.emit("output", "", file=path.name)

@@ -1,5 +1,7 @@
-# Effort workbook layout. scripts/build_templates.py turns this into assets/templates/template.xlsx
-# (styles, headers, widths, static formulas); the filler only writes rows. Tab order = list order.
+# Effort workbook layout (titles, headers, row formulas). The writer is render/workbook/filler.py, ported
+# from the old writers; layout.py pairs these headers with ledger fields. Tab order is fixed in the filler.
+
+
 file_name: "Claude_BP_Effort_Output_{client}_{timestamp}_Summary.xlsx"
 sheets:
   project_summary:   {title: Summary of Project Effort}

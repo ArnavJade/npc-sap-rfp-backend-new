@@ -92,10 +92,14 @@ def analytics_object_effort(row: Mapping[str, Any] | AnalyticsObject, policy: Po
 
 # ------------------------------------------------------------------ tables
 def _dm_row(row: DataMigrationObject, keys: Iterable[str]) -> dict[str, Any]:
-    label = row.object.strip()
+    # Old object_label: the RFP area prefixes the object (the same object recurs across areas) and MDG
+    # rows carry their data domain.
     category = row.category.strip()
+    parts = [row.module.strip()] if row.module.strip() else []
     if category and category.replace(" ", "").lower() != "masterdata":
-        label = f"{category} - {label}"                 # MDG domains etc. (old object_label)
+        parts.append(category)
+    parts.append(row.object.strip())
+    label = " - ".join(parts)
     return {"row_id": row.row_id, "object": row.object.strip(), "label": label, "status": row.status,
             "sap_module": row.sap_module.strip(), "category": category, "mm_compulsory": row.mm_compulsory,
             **{key: float(getattr(row, key)) for key in keys}}

@@ -30,19 +30,26 @@ class SectionExcerpt(BaseModel):
 
 
 class Disclosure(BaseModel):
-    """Which internal estimation detail the client explicitly asked to see. Withheld -> Excel only."""
+    """Which internal estimation detail the client explicitly asked to see. Withheld -> Excel only.
+
+    Every category defaults to withheld: detail is disclosed only when the RFP asks for it (with the
+    wording in `evidence`), so a missing or partial profile can never expose unrequested commercials."""
     model_config = ConfigDict(extra="ignore")
-    scope_item_detail: bool = True
-    effort_detail: bool = True
-    resource_allocation: bool = True
-    resource_location: bool = True
-    commercial_detail: bool = True
+    scope_item_detail: bool = False
+    effort_detail: bool = False
+    resource_allocation: bool = False
+    resource_location: bool = False
+    commercial_detail: bool = False
     evidence: dict[str, str] = Field(default_factory=dict, description="category -> RFP wording that justified True.")
     source: Literal["default", "rfp", "fallback"] = "default"
 
     @classmethod
     def high_level(cls, source: str = "fallback") -> "Disclosure":
         return cls(**{k: False for k in DISCLOSURE_CATEGORIES}, source=source)
+
+    @classmethod
+    def full(cls, source: str = "rfp") -> "Disclosure":
+        return cls(**{k: True for k in DISCLOSURE_CATEGORIES}, source=source)
 
     @property
     def withheld(self) -> list[str]:

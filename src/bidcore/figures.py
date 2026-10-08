@@ -17,18 +17,21 @@ TABLE_KEYS = ("module_summary", "functional_scope", "resource_plan", "raci", "ro
 INDICATIVE_GROUPS = ("module", "wave", "country", "role", "workstream")
 DIAGRAM_KEYS = ("timeline", "methodology", "architecture")
 
-# Which disclosure category withholds a placeholder (category names from the Disclosure model).
+# Which disclosure category withholds a placeholder (category names from the Disclosure model). Tables
+# that stay but lose columns or turn qualitative under a withheld category (functional_scope,
+# module_summary, effort, resource_plan) are handled by render/docx/tables.py, not withheld here.
 WITHHELD_BY = {
     "commercial_detail": {"fig:total_project_cost", "fig:daily_rate", "fig:hypercare_rate", "table:cost"},
     "effort_detail": {"fig:total_project_effort", "fig:total_build_effort", "fig:functional_scope_effort",
                       "fig:tech_dev_effort", "fig:data_migration_effort", "fig:security_effort",
                       "fig:basis_effort", "fig:analytics_effort", "fig:hypercare_effort", "fig:final_prep_effort",
                       "fig:go_live_effort", "fig:project_mgmt_effort", "fig:risk_contingency_effort",
-                      "fig:summary_of_imp_effort", "table:effort", "table:functional_scope",
-                      *(f"table:indicative_breakdown:{g}" for g in INDICATIVE_GROUPS)},
-    "resource_allocation": {"table:resource_plan", "fig:peak_fte", "fig:total_man_months"},
-    "resource_location": {"table:role_roster"},
-    "scope_item_detail": {"fig:scope_item_count", "table:functional_scope"},
+                      "fig:summary_of_imp_effort",
+                      *(f"table:indicative_breakdown:{g}" for g in INDICATIVE_GROUPS if g != "role")},
+    "resource_allocation": {"table:role_roster", "table:indicative_breakdown:role", "fig:peak_fte",
+                            "fig:total_man_months"},
+    "resource_location": set(),
+    "scope_item_detail": {"fig:scope_item_count"},
 }
 
 

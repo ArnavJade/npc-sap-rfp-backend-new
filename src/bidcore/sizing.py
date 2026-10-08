@@ -16,7 +16,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from bidcore.effort.catalogue_effort import compute_catalogue_effort
-from bidcore.effort.models import EffortModel, NonCatalogueEffort
+from bidcore.effort.models import PHASE_FIELDS, EffortModel, NonCatalogueEffort, TechDevRow
 from bidcore.effort.summary import SummaryLadder, compute_summary
 from bidcore.effort.techdev import compute_tech_dev
 from bidcore.effort.waves import WaveEffort, allocate_waves
@@ -26,7 +26,7 @@ from bidcore.policy import Policy, get_policy
 from bidcore.resourcing import (
     build_resource_plan, is_project_management, price_plan, rebalance_plan_to_effort_summary, sync_scope_tables,
 )
-from bidcore.resourcing.models import PassWeights, ResourcePlan, WaveSpec
+from bidcore.resourcing.models import GridCell, PassWeights, ResourcePlan, WaveSpec
 from bidcore.timeline.model import ResolvedTimeline
 from bidcore.timeline.resolve import resolve_timeline
 
@@ -50,13 +50,83 @@ def bid_countries(ledger: Ledger) -> list[str]:
     return [c.code for c in profile.countries if c.scope_type == "in_scope"] if profile else []
 
 
-def _overrides(ledger: Ledger, kind: str) -> dict[str, Any]:
-    """Applied reviewer edits of one field, keyed by row id (call 2)."""
-    return {o.row_id: o.new for o in ledger.overrides if o.applied and o.field == kind and o.row_id}
+HYPERCARE_SETTING = "hypercare_effort_days"
+
+
+def _overrides(ledger: Ledger, kind: str, section: str = "scope_items") -> dict[str, Any]:
+    """Applied reviewer edits of one field of one section's lines, keyed by row id (call 2)."""
+    return {o.row_id: o.new for o in ledger.overrides
+            if o.applied and o.kind == "edit" and o.section == section and o.field == kind and o.row_id}
+
+
+def _deleted(ledger: Ledger, section: str) -> set[str]:
+    return {o.row_id for o in ledger.overrides if o.applied and o.kind == "deleted_row" and o.section == section}
 
 
 def _settings_overrides(ledger: Ledger) -> dict[str, Any]:
     return {o.field: o.new for o in ledger.overrides if o.applied and o.kind == "setting"}
+
+
+def _apply_line_overrides(ledger: Ledger, effort: EffortModel) -> None:
+    """Reviewer edits of catalogue lines (phase cells, deletions) and Tech Dev lines (call 2)."""
+    deleted = _deleted(ledger, "scope_items")
+    phase_edits = {f: _overrides(ledger, f) for f in PHASE_FIELDS}
+    for module in effort.modules.values():
+        module.rows = [r for r in module.rows if r.row_id not in deleted]
+        for row in module.rows:
+            for field, edits in phase_edits.items():
+                if row.row_id in edits and edits[row.row_id] is not None:
+                    setattr(row, field, float(edits[row.row_id]))
+            row.compute_total()
+    td_deleted = _deleted(ledger, "tech_dev")
+    td_fields = ("no_of_objects", "development", "configuration", "unit_testing", "qa_testing")
+    td_edits = {f: _overrides(ledger, f, "tech_dev") for f in td_fields}
+    rows = [r for r in effort.tech_dev if r.row_id not in td_deleted]
+    for row in rows:
+        for field, edits in td_edits.items():
+            if row.row_id in edits and edits[row.row_id] is not None:
+                value = edits[row.row_id]
+                setattr(row, field, int(round(float(value))) if field == "no_of_objects" else round(float(value), 2))
+    for n, added in enumerate(o for o in ledger.overrides
+                              if o.applied and o.kind == "added_row" and o.section == "tech_dev"):
+        data = dict(added.new or {})
+        rows.append(TechDevRow(
+            row_id=f"reviewer-{n + 1}", source="reviewer", module=str(data.get("module") or "All"),
+            object_name=str(data.get("object_name") or "Reviewer addition"),
+            object_type=str(data.get("object_type") or ""), middleware=str(data.get("middleware") or ""),
+            source_system=str(data.get("source_system") or ""), target_system=str(data.get("target_system") or ""),
+            no_of_objects=int(round(float(data.get("no_of_objects") or 1))),
+            complexity=str(data.get("complexity") or "Medium"),
+            **{f: round(float(data.get(f) or 0.0), 2) for f in td_fields[1:]}))
+    effort.tech_dev = rows
+
+
+def _apply_grid_overrides(ledger: Ledger, plan: ResourcePlan, policy: Policy) -> list[str]:
+    """Reviewer FTE edits on the resource grids: row id 'wave||role||location', field 'M<k>'."""
+    notes: list[str] = []
+    grids = {g.wave_name: g for g in plan.grids}
+    for o in ledger.overrides:
+        if not (o.applied and o.kind == "edit" and o.section == "grid"):
+            continue
+        wave, _, rest = o.row_id.partition("||")
+        role, _, location = rest.partition("||")
+        grid = grids.get(wave)
+        row = next((r for r in grid.rows if r.role_title == role and r.location == location), None) if grid else None
+        try:
+            month = int(o.field.lstrip("M"))
+        except ValueError:
+            month = 0
+        if row is None or not 1 <= month <= grid.months:
+            notes.append(f"grid edit {o.row_id} {o.field} no longer matches the plan; ignored")
+            continue
+        fte = max(float(o.new or 0.0), 0.0)
+        cell = next((c for c in row.cells if c.month_index == month), None)
+        if cell is None:
+            row.cells.append(GridCell(month_index=month, phase=grid.phase_bands[month - 1], fte=fte))
+            row.cells.sort(key=lambda c: c.month_index)
+        else:
+            cell.fte = fte
+    return notes
 
 
 def _wave_tags(ledger: Ledger, countries: list[str]) -> dict[str, str]:
@@ -92,8 +162,10 @@ def compute_effort(ledger: Ledger, wave_count: int, policy: Policy | None = None
     tables = build_workstream_tables(
         ledger.data_migration.rows, ledger.basis.rows, ledger.security.rows, ledger.analytics.rows,
         ledger.analytics_scope.data, max(wave_count, 1), policy)
-    return EffortModel(rate_card_sheet=ledger.meta.rate_card_sheet, modules=modules,
-                       non_catalogue=non_catalogue, tech_dev=tech_dev, workstreams=tables)
+    effort = EffortModel(rate_card_sheet=ledger.meta.rate_card_sheet, modules=modules,
+                         non_catalogue=non_catalogue, tech_dev=tech_dev, workstreams=tables)
+    _apply_line_overrides(ledger, effort)
+    return effort
 
 
 def _submodule_effort(effort: EffortModel) -> tuple[dict[str, list[str]], dict[str, dict[str, float]]]:
@@ -122,6 +194,7 @@ def _submodule_effort(effort: EffortModel) -> tuple[dict[str, list[str]], dict[s
 def size_bid(ledger: Ledger, policy: Policy | None = None) -> SizingResult:
     policy = policy or get_policy()
     settings = _settings_overrides(ledger)
+    hypercare_override = settings.pop(HYPERCARE_SETTING, None)
     countries = bid_countries(ledger)
     notes: list[str] = []
 
@@ -147,9 +220,10 @@ def size_bid(ledger: Ledger, policy: Policy | None = None) -> SizingResult:
         submodules, submodule_effort, [n.name for n in effort.non_catalogue], integration_names, pm_names, policy)
 
     def ladder(totals: dict[str, float]) -> SummaryLadder:
+        hypercare = plan.hypercare_effort_days if hypercare_override is None else float(hypercare_override)
         return compute_summary(
             effort.core_bp_effort + effort.non_catalogue_effort, totals["data_migration"], effort.tech_dev_effort,
-            totals["security"], totals["basis"], totals["analytics"], plan.hypercare_effort_days, policy, settings)
+            totals["security"], totals["basis"], totals["analytics"], hypercare, policy, settings)
 
     totals = workstream_totals(effort.workstreams, policy)
     summary = ladder(totals)
@@ -160,7 +234,8 @@ def size_bid(ledger: Ledger, policy: Policy | None = None) -> SizingResult:
         notes += sync_scope_tables(plan, effort.workstreams, policy, seed=ledger.meta.bid_id)
         totals = workstream_totals(effort.workstreams, policy)
     hypercare = plan.hypercare_effort_days
-    price_plan(plan, policy)
+    notes += _apply_grid_overrides(ledger, plan, policy)
+    price_plan(plan, policy, daily_rate=settings.get("daily_rate_usd"))
     plan.hypercare_effort_days = hypercare   # the Summary's Hypercare row stays the pre-rebalance figure
     summary = ladder(totals)
     return SizingResult(effort=effort, timeline=timeline, wave_effort=wave_effort, weights=weights, plan=plan,

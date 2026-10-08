@@ -1,0 +1,8 @@
+.venv
+.git
+workspace
+tests
+**/__pycache__
+*.md
+!skills/**/*.md
+!src/harness/prompts/*.md

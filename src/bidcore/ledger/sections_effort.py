@@ -165,10 +165,11 @@ class Fiori(BaseModel):
 
 
 class DataMigrationObject(Row):
-    object: str = Field(description="Conversion object, e.g. 'Material Master'.")
-    rfp_label: str = Field("", description="The RFP's own wording for it.")
-    sap_module: str = ""
-    category: str = "Master Data"
+    object: str = Field(description="Master data object, e.g. 'Material Master'.")
+    module: str = Field("", description="The RFP's area name the object is listed under, e.g. 'Order to Cash'.")
+    rfp_label: str = Field("", description="The RFP's own wording for it (verbatim).")
+    sap_module: str = Field("", description="Standard SAP module short name owning the object, e.g. 'MM'.")
+    category: str = Field("Master Data", description="MDG data domain for MDG objects, else 'Master Data'.")
     status: Status = "In Scope"
     func_spec: float = 1.0
     program_dev: float = 1.0
@@ -199,6 +200,7 @@ class AnalyticsObject(Row):
     object: str
     object_type: Literal["Model", "Report", "CDS View"] = "Report"
     build: Literal["Custom", "Standard"] = "Custom"
+    sap_product: str = Field("", description="SAP analytics product the RFP names for it; '' when none.")
     no_of_objects: int = 1
     status: Status = "In Scope"
     complexity: Complexity = "Medium"

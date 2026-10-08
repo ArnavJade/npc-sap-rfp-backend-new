@@ -54,7 +54,22 @@ def base_outline(client_name: str = "the client") -> list[OutlineSection]:
     return sections
 
 
+TABLE_KINDS = ("indicative_breakdown", "phase_plan")
+DEFAULT_ANCHOR = {"indicative_breakdown": "6.1", "phase_plan": "4.3", "narrative": "6.1"}
+CLIENT_WORDS = {"narrative": [80, 150], "indicative_breakdown": [30, 90], "phase_plan": [50, 200]}
+ADDITIONAL_ID = "additional"
+# A mapped requirement that names any of these turns the section's combined resource/effort view on.
+RESOURCE_EFFORT_CUES = ("resource", "staffing", "fte", "man-month", "man month", "manmonth", "team size",
+                        "headcount", "role-wise", "role wise", "person-month")
+
+
 def merged_outline(ledger: Ledger) -> list[OutlineSection]:
+    """Standard outline + client-required sections, by the proposal-outline skill's placement rules:
+    a table-shaped requirement always gets its own section (anchor: placement, else mapped section,
+    else 4.3 / 6.1); a narrative requirement with a valid mapped section folds into it, otherwise it
+    gets its own section after its placement (else 6.1). New sections are level 3, numbered
+    <anchor>.<n>, and render right after their anchor. An `additional` presales brief adds a final
+    level-1 section."""
     sections = base_outline(ledger.meta.client_name)
     by_id = {s.id: s for s in sections}
     rr = ledger.response_requirements.data
@@ -66,28 +81,40 @@ def merged_outline(ledger: Ledger) -> list[OutlineSection]:
     for sid, brief in rr.instructions_briefs.items():
         if sid in by_id and brief.strip():
             by_id[sid].briefs.append(f"Presales instruction: {brief.strip()}")
+
+    def valid(section_id: str) -> str:
+        return section_id if section_id in by_id else ""
+
     extra: dict[str, list[OutlineSection]] = {}
-    for n, req in enumerate(rr.requirements, start=1):
+    for req in rr.requirements:
+        target = valid(req.maps_to_section_id)
+        if req.kind not in TABLE_KINDS and target:
+            by_id[target].briefs.append(f"Client requirement '{req.title}': {req.intent}")
+            if any(cue in f"{req.title} {req.intent}".lower() for cue in RESOURCE_EFFORT_CUES):
+                by_id[target].combine_resource_effort = True
+            continue
+        anchor = (valid(req.placement_after_section_id) or target or DEFAULT_ANCHOR[req.kind])
+        anchor = anchor if anchor in by_id else sections[-1].id
         artifact = ""
         if req.kind == "indicative_breakdown":
             artifact = f"table:indicative_breakdown:{req.group_by or 'workstream'}"
         elif req.kind == "phase_plan":
             artifact = "table:wave_plan"
-        target = by_id.get(req.maps_to_section_id)
-        if target is not None:
-            target.briefs.append(f"Client requirement '{req.title}': {req.intent}")
-            if artifact and not target.artifact:
-                target.artifact = artifact
-            continue
-        anchor = req.placement_after_section_id if req.placement_after_section_id in by_id else sections[-1].id
-        extra.setdefault(anchor, []).append(OutlineSection(
-            id=f"R{n}", title=req.title, level=3, narrative=True, artifact=artifact, words=[150, 400],
-            facts=["requirements", "profile"], client_required=True, anchor=anchor,
-            briefs=[f"Client requirement: {req.intent}"]))
+        siblings = extra.setdefault(anchor, [])
+        siblings.append(OutlineSection(
+            id=f"{anchor}.{len(siblings) + 1}", title=req.title, level=3, narrative=True, artifact=artifact,
+            words=list(CLIENT_WORDS[req.kind]), facts=["requirements", "profile", "timeline"]
+            if req.kind == "phase_plan" else ["requirements", "profile"], client_required=True, anchor=anchor,
+            briefs=[f"Client requirement ({req.kind}{', by ' + req.group_by if req.group_by else ''}): {req.intent}"]))
     out: list[OutlineSection] = []
     for section in sections:
         out.append(section)
         out.extend(extra.get(section.id, []))
+    additional = (rr.instructions_briefs.get(ADDITIONAL_ID) or "").strip()
+    if additional:
+        out.append(OutlineSection(id=ADDITIONAL_ID, title="Additional Client-Requested Notes", level=1,
+                                  narrative=True, words=[60, 200], facts=["requirements", "profile"],
+                                  briefs=[f"Presales instruction: {additional}"]))
     return out
 
 
