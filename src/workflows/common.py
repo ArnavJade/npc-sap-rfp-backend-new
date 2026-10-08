@@ -44,11 +44,11 @@ def make_captioner(run: RunContext):
         import base64
 
         import litellm
-        from bidcore.ingest import VISION_PROMPT
+        from bidcore.ingest import vision_prompt
 
         data = base64.b64encode(image_bytes).decode()
         response = litellm.completion(model=model, messages=[{"role": "user", "content": [
-            {"type": "text", "text": f"{VISION_PROMPT}\n\nText around the image:\n{context[:1500]}"},
+            {"type": "text", "text": vision_prompt(context[:1500])},
             {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}},
         ]}], max_tokens=2000)
         return response.choices[0].message.content or ""
