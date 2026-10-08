@@ -80,6 +80,9 @@ def build_effort_workflow(run: RunContext):
         return "agents" if state.get("gaps") and state.get("attempts", 0) <= retries else "size"
 
     async def size(state: EffortState) -> dict:
+        from harness.tools.catalogue_tools import ensure_finance_core
+
+        ensure_finance_core(run)                  # deterministic, as the old Layer 2 did
         ledger = run.ledger.load()
         sizing = size_bid(ledger, run.policy)
         figures = compute_figures(ledger, sizing)

@@ -53,8 +53,10 @@ def last_ai_text(result: dict) -> str:
 
 
 def make_captioner(run: RunContext):
-    """Embedded-image captioning with the 'vision' role model (INGEST_VISION=on), else None."""
-    if os.getenv("INGEST_VISION", "off").strip().lower() not in ("on", "1", "true", "yes"):
+    """Embedded-image captioning with the 'vision' role model, else None. On by default, as in the old
+    Aperture pipeline (it always sent images to a vision model): integration landscapes and scope
+    matrices are often only pictures. INGEST_VISION=off disables it."""
+    if os.getenv("INGEST_VISION", "on").strip().lower() not in ("on", "1", "true", "yes"):
         return None
     from harness.llm import resolve_model_name
 

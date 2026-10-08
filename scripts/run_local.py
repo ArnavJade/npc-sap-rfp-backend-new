@@ -3,7 +3,9 @@
     python scripts/run_local.py effort  --rfp path/to/rfp.pdf [--rfp annex.xlsx] --client "ARASCO" [--sheet "SAP BP"]
     python scripts/run_local.py proposal --workbook reviewed.xlsx [--rfp rfp.pdf] [--instructions "..."]
 
-Call 1 prints the bid id and the workbook path; call 2 finds the bid from the workbook's `_bid` sheet.
+Call 1 prints the bid id and the workbook path. Call 2 takes any effort workbook in the template layout: it
+reuses the call-1 bid when the workbook's hidden `_bid` sheet names one in this WORKSPACE_DIR, else it
+builds a new bid from the workbook alone.
 Progress (stages, agent starts/ends, tool calls) is printed as it happens; the full trace is in
 workspace/bids/<bid_id>/trace/events.jsonl.
 """
@@ -78,8 +80,9 @@ async def effort(args) -> None:
 
 async def proposal(args) -> None:
     services.ensure_models_configured("proposal", args.model)
-    bid_id = services.bid_of_workbook(Path(args.workbook))
-    ws = BidWorkspace.open(bid_id, create=False)
+    services.check_effort_workbook(Path(args.workbook))
+    ws = services.proposal_workspace(Path(args.workbook))   # linked call-1 bid, else a new one from the workbook
+    print(f"bid {ws.bid_id} -> {ws.root}")
     book = _copy(ws, [args.workbook])[0]
     rfp = _copy(ws, args.rfp or [])
     try:

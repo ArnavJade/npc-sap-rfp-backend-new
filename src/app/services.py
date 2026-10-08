@@ -18,11 +18,11 @@ from typing import Any, Callable
 from bidcore.ledger.models import new_ledger
 from bidcore.paths import rate_card_path
 from bidcore.policy import get_policy
-from bidcore.render.workbook import read_bid_sheet
+from bidcore.render.workbook import WorkbookError, read_bid_sheet
 from harness import llm
 from harness.context import RunContext
 from harness.observability import error_info, load_events, run_log, summarize
-from harness.workspace import BidWorkspace
+from harness.workspace import BidWorkspace, new_bid_id
 
 log = logging.getLogger(__name__)
 Sink = Callable[[dict[str, Any]], None]
@@ -62,6 +62,39 @@ def check_rate_card_sheet(sheet: str | None) -> str:
 def bid_of_workbook(path: Path) -> str:
     """The bid id stamped in a reviewed workbook (WorkbookError -> 422 when it is not ours)."""
     return read_bid_sheet(path)["bid_id"]
+
+
+def check_effort_workbook(path: Path) -> None:
+    """ServiceError (-> 422) unless `path` reads as an effort workbook in the template layout."""
+    from bidcore.render.workbook.reader import WorkbookFormatError, read_effort_workbook
+
+    try:
+        read_effort_workbook(path)
+    except WorkbookFormatError as exc:
+        raise ServiceError(str(exc)) from None
+
+
+def linked_bid(path: Path) -> BidWorkspace | None:
+    """The call-1 bid this workbook came from, when its hidden `_bid` sheet names a bid that exists on
+    this server with the render manifest. Optional: without it call 2 builds the bid from the workbook
+    alone (any workbook in the template layout - another server's, the old agent's, hand-made)."""
+    from bidcore.render.workbook.manifest import manifest_path
+
+    try:
+        stamp = read_bid_sheet(path)
+        ws = BidWorkspace.open(stamp["bid_id"], create=False)
+    except (WorkbookError, FileNotFoundError, ValueError, KeyError):
+        return None
+    except Exception:            # an unreadable _bid sheet is not a reason to refuse the workbook
+        return None
+    if ws.ledger.exists() and manifest_path(ws.ledger.dir, stamp["render_id"]).is_file():
+        return ws
+    return None
+
+
+def proposal_workspace(path: Path) -> BidWorkspace:
+    """The linked call-1 bid, else a fresh bid workspace that call 2 fills from the workbook."""
+    return linked_bid(path) or BidWorkspace.open(new_bid_id())
 
 
 def prepare_effort(ws: BidWorkspace, client_name: str, rate_card_sheet: str, models: dict[str, str]) -> None:

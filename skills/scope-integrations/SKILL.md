@@ -21,7 +21,11 @@ Ported from section (A) of the old scope prompt
 ## Where to look
 Read the whole RFP, not only an obviously-titled integration section. Integration modules,
 interface counts and complexity splits are VERY OFTEN shown only inside `[EMBEDDED IMAGE]` blocks
-(an integration architecture diagram) or `[EXTRACTED TABLE]` blocks, transcribed as lines like:
+(an integration architecture diagram), PDF diagram text between `<!-- Start of picture text -->` and
+`<!-- End of picture text -->` (the box labels of a vector diagram, in jumbled order - every name in
+it that is not an SAP module, protocol or "DB" is a candidate system, e.g. "Wincos", "Brill",
+"Sadad", "HHT - MIRNA", "Qlik", "ZATCA", "IMOC"), or `[EXTRACTED TABLE]` blocks, transcribed as
+lines like:
 
     REST <-> SAP FI/CO : Real-time RFC interfaces (SAP side)
     Coupa <-> SAP (Treasury / Cash / Bank)

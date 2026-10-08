@@ -155,7 +155,7 @@ with tab1:
                         st.warning(f"Sections the agents did not produce: {result['gaps']}")
                     ledger_summary(result["bid_id"])
                     download(result["bid_id"], result["workbook"], "Download effort workbook")
-                    st.info("Review and edit the workbook (keep the hidden _bid sheet), then use tab 2.")
+                    st.info("Review and edit the workbook, then use tab 2 (any workbook in this template layout works there).")
 
 with tab2:
     with st.form("proposal"):

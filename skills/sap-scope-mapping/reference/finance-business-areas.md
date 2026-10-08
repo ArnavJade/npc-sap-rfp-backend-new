@@ -85,8 +85,8 @@ boundaries - read them carefully.
 ## Finance core
 
 Whenever the Finance LOB is in scope for a country, the Finance core Business Areas set in policy
-(`catalogue.finance_core_business_areas` - currently Accounting and Financial Close, Advanced
-Financial Operations, Cost Management and Profitability Analysis) must always be represented for
-that country: the model-only mapping consistently omitted them. Add every country-available scope
-item of those areas that is not already selected (so effort is never double-counted), with
-`mapping_basis: "finance_core"`.
+(`catalogue.finance_core_business_areas` - currently Accounting and Financial Close, Financial
+Operations, Advanced Financial Operations, Cost Management and Profitability Analysis) must always be
+represented for that country: the model-only mapping consistently omitted them. The effort workflow
+adds every country-available scope item of those areas that is not already selected (so effort is
+never double-counted) after the agents stop, with `mapping_basis: "finance_core"`.

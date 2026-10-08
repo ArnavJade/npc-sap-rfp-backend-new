@@ -103,6 +103,7 @@ class TraceMiddleware(AgentMiddleware):
                         tool_calls=calls, output=preview(output, 600))
         if not output and not calls:
             self.trace.emit("model_empty", self.agent, call=self._calls, level="warning",
+                            finish_reason=meta.get("finish_reason") or meta.get("stop_reason"),
                             note="model returned neither text nor tool calls")
         record = {"agent": self.agent, "call": self._calls, "model": self._model_name(request), "ms": ms,
                   "usage": usage, "finish_reason": meta.get("finish_reason"), "tool_calls": calls,

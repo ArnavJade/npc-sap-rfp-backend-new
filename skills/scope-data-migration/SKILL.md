@@ -19,7 +19,10 @@ Ported from section (D) of the old scope prompt and data_migration_scope.py. Tab
 
 ## Where to look
 RFPs present migration scope in many ways, often several at once. Search the WHOLE RFP - prose,
-lists, `[EXTRACTED TABLE]` and `[EMBEDDED IMAGE]` blocks - and use every source you find:
+lists, `[EXTRACTED TABLE]` and `[EMBEDDED IMAGE]` blocks, PDF diagram text ("Start of picture
+text") - and use every source you find. Per-module process-scope tables (e.g. "Order to Cash",
+"Procure to Pay", "Plan to Produce", "Transport Management", "MDG") are the usual source: their
+master-data rows / sub-processes name the objects:
 - a dedicated data migration / conversion / cutover section, table, appendix or annexure (object
   list, data object inventory, load plan, record volumes per object);
 - running text naming master data to be migrated, converted, loaded or cleansed ("customer, vendor

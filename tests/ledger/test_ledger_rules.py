@@ -75,3 +75,13 @@ def test_overlaps_reported_with_winner(ledger):
     found = {(o.keep_row_id, o.drop_row_id) for o in find_overlaps(ledger)}
     assert ("int-1", "nc-1") in found and ("sec-1", "nc-2") in found
     assert normalize_system_name("Marel system") == "marel"
+
+
+def test_non_catalogue_band_is_derived_not_rejected(vctx):
+    # Gemini sent effort_band "M" for every tool; the band is now derived from kind + effort with a note.
+    [tool] = validate("non_catalogue", [NonCatalogueItem(name="SAP Solution Manager", effort_band="M", effort_days=5,
+                                                         evidence=[ev("SAP Solution Manager")])], vctx)
+    assert tool.ok and tool.row.effort_band == "sap_tool_light" and tool.notes
+    [module] = validate("non_catalogue", [NonCatalogueItem(name="SAP Solution Manager", kind="sap_module_no_bp",
+                                                           evidence=[ev("SAP Solution Manager")])], vctx)
+    assert module.ok and module.row.effort_band == "sap_module_no_best_practice" and module.row.effort_days == 40

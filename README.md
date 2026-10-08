@@ -58,7 +58,7 @@ Optional settings:
 | Variable | Purpose |
 |---|---|
 | `LLM_MODEL_<ROLE>` | A different model per role. Roles: `ORCHESTRATOR`, `ANALYST`, `SPECIALIST`, `MAPPER`, `PLANNER`, `WRITER`, `REVIEWER`, `VISION` |
-| `INGEST_VISION=on` | Transcribe images in the RFP (diagrams, scanned tables) with the `vision` role model |
+| `INGEST_VISION=off` | Images in the RFP (diagrams, scanned tables) are transcribed with the `vision` role model by default; `off` skips it |
 | `INGEST_PDF_ENGINE=docling` | Use the Docling PDF engine instead of pymupdf4llm (`pip install -e ".[docling]"`) |
 | `WORKSPACE_DIR` | Where bids are stored (default `./workspace`) |
 | `MAX_CONCURRENT_JOBS` | Number of bids the API runs at the same time (default 2) |
@@ -95,7 +95,8 @@ python scripts/run_local.py effort \
 - change FTE cells in the *Project Timeline* grids;
 - delete rows, or add rows inside a table.
 
-Do **not** delete or edit the hidden `_bid` sheet: it links the workbook to its bid. Do not overwrite
+The hidden `_bid` sheet links the workbook to its bid (keep it to reuse the RFP evidence of step 1); it is
+optional - call 2 also accepts a workbook without it (see step 3). Do not overwrite
 formula cells (Totals). An overwritten formula is reported as a conflict and is not applied.
 
 **Step 3: reviewed Excel → YASH Word response**
@@ -107,7 +108,10 @@ python scripts/run_local.py proposal \
     --out "ARASCO_Response.docx"
 ```
 
-- The bid is found from the workbook's `_bid` sheet. Run on the same machine and `WORKSPACE_DIR` as step 1.
+- Any workbook in the effort-template layout works. When its hidden `_bid` sheet names a bid in this
+  `WORKSPACE_DIR`, that bid is reused (its ledger, RFP and evidence); otherwise - no `_bid` sheet, a workbook
+  from another server, the old agent or a hand-made one - a new bid is built from the workbook alone and
+  every figure in the document is taken from the workbook's sheets.
 - `--rfp file` is optional: pass it only if the RFP changed since step 1.
 - `--instructions` is optional free text from presales. It becomes per-section guidance.
 - The document is written to `workspace/bids/<bid_id>/outputs/YASH_SAP_RFP_Response_<client>_<timestamp>.docx`,
@@ -150,7 +154,7 @@ curl -F "files=@ARASCO RFP.pdf" -F "client_name=ARASCO" -F "rate_card_sheet=SAP 
 
 curl -o effort.xlsx "http://localhost:8000/bids/<bid_id>/files/<workbook name>"
 
-# Call 2: reviewed workbook -> Word (bid id is read from the workbook's _bid sheet)
+# Call 2: reviewed workbook -> Word (linked to its call-1 bid via the _bid sheet when present; optional)
 curl -F "workbook=@effort_reviewed.xlsx" -F "instructions=Keep it concise" \
      "http://localhost:8000/proposals?wait=true"
 curl -o response.docx "http://localhost:8000/bids/<bid_id>/files/<document name>"
@@ -249,7 +253,7 @@ RFP or write sections, edit `skills/**/SKILL.md`. Both take effect on the next r
 | Symptom | Fix |
 |---|---|
 | `No model configured for role ...` / HTTP 422 | Set `LLM_MODEL` (and the provider key) in `.env` |
-| `this workbook has no '_bid' sheet` | Only workbooks produced by call 1 of this service can be used for call 2. Regenerate it |
+| `does not look like an effort workbook` | Call 2 needs the effort-template layout (LOB sheets with a 'Line of Business' header, Tech Dev Scope, Data Migration Scope, ...). The `_bid` sheet is not required |
 | `render ... is unknown here (manifest missing)` | Call 2 must run against the same `WORKSPACE_DIR` as call 1 |
 | Table of contents shows old entries | Open the file in Word and accept "update fields" (or right-click the TOC, then Update Field) |
 | Sections marked "Draft missing" | The agents did not draft them in the retries allowed. Complete them by hand, or rerun call 2 |

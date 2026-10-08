@@ -9,8 +9,9 @@ lobs: [Application Platform and Infrastructure, Asset Management, Database and D
 # LOBs that need explicit RFP evidence (no pre-resolution from a generic mention).
 sensitive_lobs: [Application Platform and Infrastructure, Asset Management, Database and Data Management,
                  Human Resources, IT Management, R&D/Engineering]
-# Finance core: a Finance-in-scope bid always carries these business areas.
-finance_core_business_areas: [Accounting and Financial Close, Advanced Financial Operations,
+# Finance core: a Finance-in-scope bid always carries these business areas (added deterministically
+# after the agents run). The old Layer 2 forced Financial Operations + Advanced Financial Operations.
+finance_core_business_areas: [Accounting and Financial Close, Financial Operations, Advanced Financial Operations,
                               Cost Management and Profitability Analysis]
 scope_types: [in_scope, optional_scope]
 implementation_statuses: [new_implementation, existing_change, existing_no_change]

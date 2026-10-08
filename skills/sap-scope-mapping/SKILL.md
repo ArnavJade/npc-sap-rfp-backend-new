@@ -54,6 +54,11 @@ Reference files - read them as you need them:
   an empty query and a `lob` + `business_area`, it lists that area's scope items (set `limit` to 100
   to get them all).
 - `check_country_availability(scope_item_ids, countries)` - Yes/No per item and country.
+- `map_scope_area(capability_refs, module_name | lob + business_area [+ description_contains],
+  countries, status)` - THE way to write scope items: it writes every catalogue item the rulebook
+  module (or the LOB / Business Area) selects that is available in the countries, merged with what
+  is already listed (one call per capability and module, not 40 typed scope ids). Use
+  `ledger_write_scope_items` only for a single item outside any area mapping, or to update a row.
 - `ledger_write_scope_items(rows, mode, none_reason)`, `ledger_write_non_catalogue(rows, mode,
   none_reason)`, `delete_rows(section, row_ids, reason)`.
 
@@ -121,11 +126,14 @@ For a capability without a rulebook target, choose the catalogue LOB(s) and Busi
   items (here Advanced Accounting and Financial Close).
 
 **Granularity.** A mapping selects every scope item of the chosen Business Area(s) that is available
-in the country - list them with `catalogue_search(query="", lob=..., business_area=...,
-countries=[...], limit=100)`. A rulebook target selects exactly what its filters select (a whole LOB,
-a Business Area, or the items whose Description / Component contains the filter text). Do not pick
-items one by one by guesswork; the reviewer prunes lines in the workbook. `mapping_basis:
-"catalogue_search"` (or `"cross_map"` when the rulebook selected them).
+in the country. A rulebook target selects exactly what its filters select (a whole LOB, a Business
+Area, or the items whose Description / Component contains the filter text). Do not pick items one by
+one by guesswork; the reviewer prunes lines in the workbook. Write them with
+`map_scope_area(module_name=...)` for a rulebook target (`mapping_basis` "cross_map") or
+`map_scope_area(lob=..., business_area=...)` for a catalogue-search decision ("catalogue_search").
+This is how the old pipeline worked (Layer 2 chose LOB + Business Area, Layer 3 kept 100 % of that
+area's items, then filtered by country) and what the reference workbooks expect: an S/4HANA RFP
+naming FI/CO, MM, SD, PP, QM, PM, TM and WM typically lands 150-250 scope items over 5-7 LOB sheets.
 
 ### 3. Regional feasibility
 
@@ -156,11 +164,11 @@ say so. Never claim availability you did not check; the write tool re-checks and
 - The same item reached from several capabilities is ONE row: union the countries and the refs.
 
 **Finance core.** Whenever Finance is in scope for a country, the Finance core Business Areas from
-policy (`catalogue.finance_core_business_areas`: Accounting and Financial Close, Advanced Financial
-Operations, Cost Management and Profitability Analysis) must be represented for that country. After
-mapping, list each core area's items available in each Finance country and add the ones not already
-selected (never twice), with `mapping_basis: "finance_core"` and the refs of that country's Finance
-capabilities.
+policy (`catalogue.finance_core_business_areas`: Accounting and Financial Close, Financial
+Operations, Advanced Financial Operations, Cost Management and Profitability Analysis) must be
+represented for that country. The workflow adds any missing core item deterministically after you
+stop (`mapping_basis: "finance_core"`), so you do not need to list them yourself - but map them with
+`map_scope_area` when a capability asks for them, so they carry its capability_refs.
 
 **SAP tools and SAP modules without Best Practice content -> `ledger_write_non_catalogue`** - rules
 in [reference/non-catalogue.md](reference/non-catalogue.md):
@@ -173,6 +181,10 @@ in [reference/non-catalogue.md](reference/non-catalogue.md):
   capability's quote), `note`;
 - never a catalogue-covered module: FI, CO, FICO, MM, SD, PP, QM, WM, EWM, TM (as the whole name or
   its abbreviation in brackets) are mapped to scope items, not listed here;
+- never a licence / subscription / hosting line ("RISE with SAP S/4HANA Private Cloud Premium",
+  "S/4HANA Cloud, private edition" itself, user licences, extra stacks of a catalogue module such
+  as "S/4HANA Cloud, Transportation Management, extra stack" - map those to the module's scope
+  items): non_catalogue is for SAP tools / modules that need implementation effort of their own;
 - an SAP security or analytics product (GRC Access Control, Cloud IAG, Process Control, Secure Login
   Service, SAP Analytics Cloud, BW/4HANA, Datasphere, BusinessObjects): read `security` /
   `analytics` first - if that workstream already carries it, do not write it here; if it does not,
@@ -236,7 +248,7 @@ integrations, and anything the reviewer should check.
 - [ ] Cash -> Treasury Management; credit / collections / disputes -> Advanced Financial Operations
 - [ ] Enterprise Risk and Compliance only with dedicated GRC / ERM / GTS evidence
 - [ ] Items selected at Business-Area (or rulebook-filter) granularity, availability checked per country
-- [ ] Finance core areas added for every Finance country (mapping_basis finance_core), no duplicates
+- [ ] Scope items written with map_scope_area per capability and module (Business-Area granularity)
 - [ ] existing_no_change -> excluded_existing; optional_scope -> optional; one row per item and status
 - [ ] Non-catalogue: one row per tool with all countries; no FI/CO/FICO/MM/SD/PP/QM/WM/EWM/TM
 - [ ] Non-catalogue effort inside its band with a driver-naming rationale; PM systems flagged
