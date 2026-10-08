@@ -46,11 +46,14 @@ def build_proposal_workflow(run: RunContext):
 
     async def apply_edits(state: ProposalState) -> dict:
         stage("apply_edits")
-        from bidcore.render.workbook.manifest import apply_overrides, read_edits
+        from bidcore.render.workbook.manifest import apply_overrides, edits_report, read_edits
 
-        edits = read_edits(Path(state["workbook"]), run.ws.root / "ledger" / "manifest.json")
+        manifest, edits = read_edits(Path(state["workbook"]), run.ws.ledger.dir)
         summary = run.ledger.update(lambda led: apply_overrides(led, edits), actor="reviewer",
-                                    action="apply workbook edits", detail=f"{len(edits)} edit(s)")
+                                    action=f"apply workbook edits (render {manifest.render_id})",
+                                    detail=f"{len(edits)} edit(s)")
+        (run.ws.notes / "reviewer-edits.md").write_text(
+            f"# Reviewer edits to the effort workbook\n\n{summary}\n\n{edits_report(edits)}\n", encoding="utf-8")
         run.trace.emit("edits", "", count=len(edits), summary=summary)
         return {"edits": [e.model_dump() for e in edits], "attempts": 0}
 
