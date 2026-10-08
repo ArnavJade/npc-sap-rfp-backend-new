@@ -27,7 +27,7 @@ def _render(tmp_path, disclosure: Disclosure | None = None):
         requirements=[ClientRequirement(title="Indicative effort by wave", intent="Show effort per wave",
                                         kind="indicative_breakdown", group_by="wave",
                                         placement_after_section_id="6.1")],
-        disclosure=disclosure or Disclosure())
+        disclosure=disclosure or Disclosure.full())
     sizing = size_bid(ledger)
     ledger.figures = compute_figures(ledger, sizing)
     drafts = tmp_path / "drafts"
@@ -72,7 +72,7 @@ def test_placeholders_resolved_and_artifacts_placed(tmp_path):
 
 
 def test_disclosure_withholds_commercials(tmp_path):
-    _, _, doc = _render(tmp_path, Disclosure(commercial_detail=False, effort_detail=False, source="rfp"))
+    _, _, doc = _render(tmp_path, Disclosure.full().model_copy(update={"commercial_detail": False, "effort_detail": False}))
     text = _text(doc)
     assert WITHHELD_FIGURE_TEXT in text
     captions = [p.text for p in doc.paragraphs if p.style.name == "Caption"]

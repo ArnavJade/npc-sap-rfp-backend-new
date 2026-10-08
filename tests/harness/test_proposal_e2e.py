@@ -52,7 +52,8 @@ def proposal_scripts() -> dict:
                 "requirements": [{"title": "Indicative effort by wave", "intent": "Effort per wave",
                                   "kind": "indicative_breakdown", "group_by": "wave",
                                   "placement_after_section_id": "6.1"}],
-                "disclosure": {"resource_location": False, "source": "rfp"}})),
+                "disclosure": {"scope_item_detail": True, "effort_detail": True, "resource_allocation": True,
+                               "commercial_detail": True, "source": "rfp"}})),
             turn(text="1 requirement."),
         ],
         "section-writer": [
