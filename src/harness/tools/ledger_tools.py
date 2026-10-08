@@ -141,9 +141,7 @@ def write_object(run: RunContext, agent: str, section: str, data: Any, none_reas
 def _schema_error(exc: Exception) -> str:
     """A malformed tool call comes back as a message the agent can fix, not a crash."""
     lines = str(exc).splitlines()
-    return "REJECTED (schema) - fix these fields and resend:
-" + "
-".join(lines[:30])
+    return "REJECTED (schema) - fix these fields and resend:\n" + "\n".join(lines[:30])
 
 
 def _write_tool(run: RunContext, agent: str, section: str) -> BaseTool:
