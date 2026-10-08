@@ -24,16 +24,8 @@ class _Trace:
 
 
 @dataclass
-class _Model:
-    model: str = "gemini/gemini-2.5-flash"
-
-
-@dataclass
 class _Request:
     messages: list
-    model: Any = field(default_factory=_Model)
-    model_settings: dict = field(default_factory=dict)
-    tool_choice: Any = None
     tools: list = field(default_factory=lambda: [{"type": "function", "function": {
         "name": n, "parameters": {"properties": {"rows": {}} if n.startswith("ledger_write") else {"pattern": {}}}}}
         for n in TOOLS])
@@ -124,99 +116,3 @@ def test_evidence_survives_table_markup():
     assert corpus.contains("Bank Communication management module is used to process the Payment Batching, "
                            "Payment approval, payment monitoring and bank Statement monitoring")   # 1 word differs
     assert not corpus.contains("Payroll for Germany is handled by an external provider")
-
-
-def test_empty_reply_escalates_thinking_off_then_forced_tool_call():
-    seen = []
-
-    def handler(request):
-        seen.append(request)
-        return _Response([AIMessage(content="")] if len(seen) < 4 else [AIMessage(content="", tool_calls=[
-            {"name": "grep", "args": {"pattern": "x"}, "id": "c", "type": "tool_call"}])])
-
-    out = ModelRecoveryMiddleware("scope-basis", _Trace(), retries=3).wrap_model_call(
-        _Request([HumanMessage(content="go")]), handler)
-    assert out.result[0].tool_calls[0]["name"] == "grep"
-    assert seen[1].model_settings == {} and seen[2].model_settings == {"reasoning_effort": "disable"}
-    assert seen[3].tool_choice == "any" and seen[3].model_settings == {"reasoning_effort": "disable"}
-
-
-def test_fallback_model_is_the_last_rung():
-    seen = []
-    fallback = _Model("bedrock/claude")
-
-    def handler(request):
-        seen.append(request.model)
-        return _Response([AIMessage(content="done" if request.model is fallback else "")])
-
-    out = ModelRecoveryMiddleware("x", _Trace(), retries=1, fallback=fallback).wrap_model_call(
-        _Request([HumanMessage(content="go")]), handler)
-    assert out.result[0].content == "done" and seen[-1] is fallback and len(seen) == 3
-
-
-def test_completion_guard_sends_the_agent_back_until_its_sections_are_written():
-    from harness.recovery import GUARD_MARK, SectionCompletionMiddleware
-
-    state = {"basis": "pending"}
-    trace = _Trace()
-    guard = SectionCompletionMiddleware("scope-basis", ["basis"], lambda: state, lambda: "", trace, max_nudges=2)
-    msgs = [HumanMessage(content="go"), AIMessage(content="I am done.")]
-    out = guard.after_model({"messages": msgs}, None)
-    assert out["jump_to"] == "model" and GUARD_MARK in out["messages"][0].content and "basis" in out["messages"][0].content
-    msgs += out["messages"] + [AIMessage(content="still done")]
-    assert guard.after_model({"messages": msgs}, None)["jump_to"] == "model"
-    msgs += [HumanMessage(content=GUARD_MARK), AIMessage(content="done")]
-    assert guard.after_model({"messages": msgs}, None) is None            # nudge budget spent
-    state["basis"] = "empty"
-    assert guard.after_model({"messages": [AIMessage(content="done")]}, None) is None
-    calling = AIMessage(content="", tool_calls=[{"name": "grep", "args": {}, "id": "c", "type": "tool_call"}])
-    state["basis"] = "pending"
-    assert guard.after_model({"messages": [calling]}, None) is None        # still working
-
-
-def test_empty_section_needs_the_rfp_read_first(tmp_path):
-    import pytest
-    from langchain_core.tools import ToolException
-
-    from bidcore.ledger.models import new_ledger
-    from harness.context import RunContext
-    from harness.tools.ledger_tools import write_rows
-    from harness.tools.rfp_tools import make_rfp_tools
-    from harness.workspace import BidWorkspace
-
-    ws = BidWorkspace.open("gate1", base=tmp_path / "ws")
-    ws.ledger.save(new_ledger("gate1"))
-    (ws.rfp / "main.md").write_text("".join(f"<!-- page: {n} -->\nPage {n} text.\n" for n in range(1, 13)))
-    run = RunContext(ws=ws, team="effort")
-    with pytest.raises(ToolException, match="read the whole RFP"):
-        write_rows(run, "scope-basis", "basis", [], "append", "nothing")
-    nxt = next(t for t in make_rfp_tools(run, "scope-basis") if t.name == "read_next_pages")
-    first = nxt.invoke({})
-    assert "p.1-8" in first and "4 page(s) still unread" in first
-    assert "whole RFP" in nxt.invoke({}) and run.coverage("scope-basis") == 1.0
-    assert write_rows(run, "scope-basis", "basis", [], "append", "nothing").startswith("Recorded basis as empty")
-
-
-def test_integration_candidates_collects_diagram_text_and_legacy_lists(tmp_path):
-    import json
-
-    from bidcore.ledger.models import new_ledger
-    from harness.context import RunContext
-    from harness.tools.integration_tools import make_integration_tools, uncovered_candidates
-    from harness.workspace import BidWorkspace
-
-    ws = BidWorkspace.open("int1", base=tmp_path / "ws")
-    ws.ledger.save(new_ledger("int1"))
-    (ws.rfp / "main.md").write_text(
-        "<!-- page: 16 -->\n## Integrations required\n<!-- Start of picture text -->\nSD DB HHT - MIRNA Wincos Brill "
-        "REST CPI Qlik ZATCA\n<!-- End of picture text -->\n<!-- page: 30 -->\nNothing here.\n"
-        "<!-- page: 52 -->\n### 13.1 Legacy Applications details & Integrations required\n- MTech poultry system\n"
-        "- LIMS laboratory system\n")
-    (ws.cache / "prescan.json").write_text(json.dumps({"third_party_candidates": [
-        {"name": "Afaqy", "file": "main.md", "page": 52}, {"name": "Qlik", "file": "main.md", "page": 16}]}))
-    run = RunContext(ws=ws, team="effort")
-    [tool] = make_integration_tools(run)
-    out = tool.invoke({})
-    assert "Wincos" in out and "p.16" in out and "MTech poultry system" in out and "Afaqy" in out
-    assert "Nothing here" not in out
-    assert uncovered_candidates(run, ["Qlik Sense"]) == ["Afaqy (p.52)"]

@@ -5,8 +5,6 @@ models:
   # null = the provider's default (recommended for Gemini 3.x, which can loop at low temperatures)
   temperature: null
   max_tokens: 16000
-  # Model an agent switches to after repeated empty replies (env LLM_MODEL_FALLBACK wins); "" = none.
-  fallback_model: ""
   request_timeout_seconds: 300
   roles:
     orchestrator: {model: ""}
@@ -24,10 +22,7 @@ limits:
   coverage_retries: 2                 # times the flow sends the orchestrator back for missing sections
   max_concurrent_jobs: 2
   model_requests_per_second: 4        # client-side rate limit shared by all agents of a run
-  empty_reply_retries: 3              # empty reply -> nudge, thinking off, forced tool call (+ fallback model)
-  completion_nudges: 3                # times a specialist is sent back when it stops with sections pending
-  full_read_max_chars: 200000         # RFPs up to this size must be read in full by every specialist ...
-  min_page_coverage: 0.9              # ... (this share of pages) before a section may be recorded empty
+  empty_reply_retries: 2              # re-ask a model that answered with neither text nor a tool call
 
 # Two teams, never mixed: an API activates only its own team.
 teams:

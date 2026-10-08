@@ -16,32 +16,6 @@ metadata:
 
 Ported from section (E) of the old scope prompt and basis_scope.py.
 
-## Detection procedure (mandatory - an empty section is the most common error)
-The first live runs left this section empty or short because the agent read one or two pages and
-stopped. So:
-1. Read the WHOLE RFP with `read_next_pages` (call it until it says the whole RFP is read). The write
-   tool refuses `rows=[]` until you have, and the harness sends you back if you stop early.
-2. While reading, note every candidate below with its page. Then grep for each signal word listed
-   below as a second pass (`grep(pattern="a|b|c", path="/rfp/")` - case-insensitive).
-3. Write what you found in batches of at most 10 rows.
-4. `rows=[]` is right only when no signal matched anywhere. Its none_reason must name the signal
-   words you searched and the pages you checked, e.g. "read p.1-52; grep 'basis|transport|backup|
-   BTP|Cloud Connector|go-live' - no Basis activity stated". A none_reason without this is rejected
-   in review.
-
-Signals (grep): `transport`, `backup`, `restore`, `landscape`, `system tier|tiers|DEV|QAS|PRD`,
-`hosting|RISE|private cloud|private edition`, `BTP|Integration Suite|CPI|Cloud Connector`,
-`Fiori|Launchpad|Gateway`, `output|printing|print`, `job|monitoring`, `go-live|go live|cutover`,
-`connection package|capacity`.
-
-Rules 2 and 3 below are met by almost every S/4HANA RFP: an Integration Suite / CPI box in the
-integration diagram, Fiori apps in scope, RISE / private-cloud hosting, or stated go-lives each give
-one row. An empty Basis section on an S/4HANA implementation RFP is almost always a reading error -
-re-check those four signals before you record it empty. A typical S/4HANA private-cloud RFP yields
-about 5-8 Basis rows of these kinds: Fiori Launchpad / Gateway set-up, transport management, backup
-and recovery coordination, BTP / Integration Suite tenant set-up, landscape tiers / connection
-package coordination, technical cutover and go-live support - each only with its RFP evidence.
-
 ## What Basis is
 The technical administration of the SAP system landscape: system / landscape set-up and coordination
 with the hosting provider, additional system tiers, clients, transport management and moving
@@ -68,6 +42,18 @@ Nothing from general SAP knowledge; when unsure, leave it out. One row per activ
 activity twice in different words. Fiori scope counts only as "Fiori Launchpad / Gateway technical
 setup". No evidence -> `rows=[]` with a none_reason.
 
+## Procedure
+1. The pages in your brief are a starting point, not the boundary. Run ONE grep over /rfp/ (literal
+   words, `|` between them) for
+   `RISE with SAP|private cloud|hosting|landscape|system tier|transport management|transports|BTP|Integration Suite|CPI|Cloud Connector|Launchpad|Gateway|output management|print|backup|back-up|cutover|go-live`
+   and read (`read_section`) every page with a hit.
+2. Write each activity as soon as you have its evidence (batches of at most 10 rows) - long reading
+   before a single write has lost this whole section before. Before a later batch,
+   `ledger_read("basis")` and send only activities not saved yet; never the same activity again in
+   other words. A rejected row: fix it and resend THAT row only.
+3. `rows=[]` only when the grep found no Basis activity; the none_reason names the searches and pages
+   checked.
+
 ## Fields
 - `activity`: a concise name in the RFP's terms.
 - `status`: "Out of Scope" when the RFP gives the activity to someone other than the implementation
@@ -82,4 +68,4 @@ setup". No evidence -> `rows=[]` with a none_reason.
 - `evidence`: the exact RFP words stating the activity (verbatim substring), file and page.
 
 ## Output
-`ledger_write_basis(rows=[...])`. Fix and resend rejected rows.
+`ledger_write_basis(rows=[...])`. Fix and resend rejected rows only.

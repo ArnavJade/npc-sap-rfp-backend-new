@@ -242,29 +242,9 @@ class WavePhasePlan(BaseModel):
     rationale: str = ""
 
 
-class DataMigrationWave(BaseModel):
-    """How one wave's Data Migration table relates to the base table the data-migration specialist wrote
-    (the first / template wave). Each wave loads its own data, so its table is the base scaled to
-    what that wave has to migrate - not a copy."""
-    model_config = ConfigDict(extra="ignore")
-    wave: str
-    scale: float = Field(1.0, description="Data volume of this wave relative to the base (first) wave: 1.0 = same; "
-                                          "e.g. 2.0 for twice the entities / plants / records, 0.5 for half.")
-    key_scale: dict[str, float] = Field(
-        default_factory=dict, description="Optional per-column factors overriding `scale`, keys from func_spec, "
-                                          "program_dev, iteration_1, iteration_2, iteration_3, cutover (e.g. "
-                                          "{'func_spec': 0.5, 'program_dev': 0.5} when a roll-out reuses templates "
-                                          "and programs).")
-    objects: list[str] = Field(default_factory=list, description="data_migration row_ids this wave migrates; "
-                                                                 "empty = every in-scope object.")
-    rationale: str = ""
-
-
 class WavePlan(BaseModel):
     model_config = ConfigDict(extra="ignore")
     allocations: list[WaveAllocation] = Field(default_factory=list)
     item_tags: list[ItemTag] = Field(default_factory=list)
     phases: list[WavePhasePlan] = Field(default_factory=list)
-    data_migration_waves: list[DataMigrationWave] = Field(
-        default_factory=list, description="Per wave: how its Data Migration table scales from the base table.")
     notes: str = ""

@@ -24,8 +24,7 @@ from harness import skills as skill_registry
 from harness.context import RunContext
 from harness.llm import chat_model
 from harness.middleware import LedgerGuardMiddleware, TraceMiddleware
-from harness.recovery import ModelRecoveryMiddleware, RfpGrepMiddleware, SectionCompletionMiddleware
-from bidcore.ledger.models import SECTIONS
+from harness.recovery import ModelRecoveryMiddleware, RfpGrepMiddleware
 from harness.tools.catalogue_tools import make_catalogue_tools
 from harness.tools.ledger_tools import make_orchestrator_tools, make_read_tools, make_write_tools
 from harness.tools.rfp_tools import make_rfp_tools
@@ -40,9 +39,8 @@ DESCRIPTIONS = {
                         "and the cross-mapping rulebook; routes SAP tools with no Best Practice content to "
                         "non_catalogue with an effort band. Writes scope_items, non_catalogue. Run after rfp-analyst.",
     "wave-planner": "Decides which wave delivers which scope: tags per-country scope lines, allocates each "
-                    "workstream's effort across waves, sets each wave's SAP Activate phase split, the duration "
-                    "of undated waves and how each wave's Data Migration table scales from the base table. "
-                    "Writes wave_plan. Run last.",
+                    "workstream's effort across waves, sets each wave's SAP Activate phase split and the duration "
+                    "of undated waves. Writes wave_plan. Run last.",
     "requirements-analyst": "Reads the RFP for what the client wants the response to contain: required sections, "
                             "per-section RFP excerpts, and which estimation detail may be disclosed. Writes "
                             "response_requirements. Run first.",
@@ -73,45 +71,11 @@ PERMISSIONS = [
 ]
 
 
-READS_RFP = ("rfp-analyst", "scope-")    # agents that must read the RFP before they may stop
-
-
-def _fallback_model(run: RunContext, role: str, name: str) -> Any:
-    """The model an agent falls back to after repeated empty replies (LLM_MODEL_FALLBACK or policy
-    models.fallback_model); None when not configured or the same as the agent's own model."""
-    import os
-
-    from harness.llm import resolve_model_name
-
-    fallback = (os.getenv("LLM_MODEL_FALLBACK", "").strip()
-                or str(run.policy.runtime.models.get("fallback_model") or "").strip())
-    if not fallback or fallback == resolve_model_name(role, run.run_model):
-        return None
-    try:
-        return chat_model(role, name, fallback)
-    except Exception:
-        return None
-
-
-def _robustness(run: RunContext, name: str, role: str = "", sections: list[str] | None = None) -> list[Any]:
-    """Empty-reply recovery, invented-tool-name repair, the page-aware RFP grep and - for agents that own
-    ledger sections - the completion guard (harness.recovery). Listed before TraceMiddleware so every
-    retry is traced as its own model call."""
-    limits = run.policy.runtime.limits
-    retries = int(limits.get("empty_reply_retries", 3))
-    reads_rfp = name.startswith(READS_RFP)
-    middleware: list[Any] = [
-        ModelRecoveryMiddleware(name, run.trace, retries, _fallback_model(run, role, name) if role else None),
-        RfpGrepMiddleware(run.ws.rfp, (lambda file, pages: run.mark_read(name, file, pages)) if reads_rfp else None),
-    ]
-    if sections:
-        def states() -> dict[str, str]:
-            ledger = run.ledger.load()
-            return {s: ledger.section(s).state for s in sections if s in SECTIONS}
-        middleware.append(SectionCompletionMiddleware(
-            name, sections, states, (lambda: run.coverage_gap(name)) if reads_rfp else (lambda: ""), run.trace,
-            int(limits.get("completion_nudges", 3))))
-    return middleware
+def _robustness(run: RunContext, name: str) -> list[Any]:
+    """Empty-reply retries, invented-tool-name repair and the page-aware RFP grep (harness.recovery).
+    Listed before TraceMiddleware so every retry is traced as its own model call."""
+    retries = int(run.policy.runtime.limits.get("empty_reply_retries", 2))
+    return [ModelRecoveryMiddleware(name, run.trace, retries), RfpGrepMiddleware(run.ws.rfp)]
 
 
 def _skill_paths(source: str, names: list[str]) -> str:
@@ -122,7 +86,7 @@ def _subagent(run: RunContext, name: str, role: str, skill_names: list[str], wri
               description: str, extra_tools: list[BaseTool]) -> dict[str, Any]:
     source = skill_registry.bundle(run.ws.skills, name, skill_names)
     write_tools = make_write_tools(run, name, [s for s in writes if s not in ("drafts", "review")])
-    tools = [*make_read_tools(run), *make_rfp_tools(run, name), *write_tools, *extra_tools]
+    tools = [*make_read_tools(run), *make_rfp_tools(run), *write_tools, *extra_tools]
     prompt = (PROMPTS / "specialist.md").read_text(encoding="utf-8").format(
         name=name, description=description, skill_paths=_skill_paths(source, skill_names),
         sections=", ".join(writes) or "nothing", tools=", ".join(t.name for t in write_tools + extra_tools) or "-")
@@ -134,8 +98,7 @@ def _subagent(run: RunContext, name: str, role: str, skill_names: list[str], wri
         "tools": tools,
         "skills": [source],
         "permissions": PERMISSIONS,
-        "middleware": [LedgerGuardMiddleware(name, writes), *_robustness(run, name, role, writes),
-                       TraceMiddleware(name, run.trace)],
+        "middleware": [LedgerGuardMiddleware(name, writes), *_robustness(run, name), TraceMiddleware(name, run.trace)],
     }
 
 
@@ -144,11 +107,7 @@ def _extra_tools(run: RunContext, name: str) -> list[BaseTool]:
         from harness.tools.catalogue_tools import make_mapping_tools
         return [*make_catalogue_tools(run), *make_mapping_tools(run, name)]
     if name.startswith("scope-"):
-        tools = [t for t in make_catalogue_tools(run) if t.name == "catalogue_search"]
-        if name == "scope-integrations":
-            from harness.tools.integration_tools import make_integration_tools
-            tools += make_integration_tools(run)
-        return tools
+        return [t for t in make_catalogue_tools(run) if t.name == "catalogue_search"]
     if name == "wave-planner":
         from harness.tools.effort_tools import make_effort_tools
         return make_effort_tools(run)
@@ -202,7 +161,7 @@ def build_team(run: RunContext, client: str, instructions: str = "") -> Any:
         skills=[source],
         backend=_backend(run),
         permissions=PERMISSIONS,
-        middleware=[*_robustness(run, orch["name"], orch["role"]), TraceMiddleware(orch["name"], run.trace)],
+        middleware=[*_robustness(run, orch["name"]), TraceMiddleware(orch["name"], run.trace)],
         checkpointer=InMemorySaver(),      # a coverage retry continues the same orchestrator conversation
         name=orch["name"],
     )

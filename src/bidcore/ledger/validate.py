@@ -16,6 +16,7 @@ from typing import Any, Callable
 from pydantic import BaseModel
 
 from bidcore.catalogue.store import Catalogue
+from bidcore.countries import check_countries, to_iso2
 from bidcore.evidence import CorpusIndex
 from bidcore.ledger.models import SECTIONS, Ledger
 from bidcore.policy import Policy
@@ -74,15 +75,19 @@ def _check_evidence(v: Verdict, ctx: ValidationContext, required: bool = True, l
 
 
 def _check_countries(codes: list[str], ctx: ValidationContext, v: Verdict, label: str = "countries") -> list[str]:
-    allowed = set(ctx.policy.catalogue.allowed_countries)
-    cleaned, bad = [], []
-    for code in codes or []:
-        c = str(code).strip().upper()
-        (cleaned if c in allowed else bad).append(c)
-    if bad:
-        v.errors.append(f"{label}: {bad} not in the allowed ISO-2 list (non-catalogue countries go to "
-                        "rfp_profile.unsupported_countries)")
-    return sorted(set(cleaned))
+    """ISO-2 catalogue codes for whatever the agent sent ('KSA' -> 'SA'). A non-catalogue country is
+    dropped with a note; the row is rejected only when nothing but non-catalogue countries is left (it
+    belongs in rfp_profile.unsupported_countries) or a value names no known country."""
+    check = check_countries(codes, ctx.policy.catalogue.allowed_countries)
+    if check.unknown:
+        v.errors.append(f"{label}: {check.unknown} are not recognised countries - use ISO-2 codes from the "
+                        "allowed list (e.g. 'SA', 'AE', 'US')")
+    elif check.unsupported and not check.codes:
+        v.errors.append(f"{label}: {check.unsupported} are not catalogue countries (non-catalogue countries go "
+                        "to rfp_profile.unsupported_countries)")
+    elif check.unsupported or check.renamed:
+        v.notes.append(f"{label}: {check.note()}")
+    return sorted(check.codes)
 
 
 # ------------------------------------------------------------------------------ per section
@@ -90,7 +95,7 @@ def _rfp_profile(v: Verdict, ctx: ValidationContext) -> None:
     allowed = set(ctx.policy.catalogue.allowed_countries)
     kept = []
     for c in v.row.countries:
-        c.code = c.code.strip().upper()
+        c.code = to_iso2(c.code) or c.code.strip().upper()
         if c.code in allowed:
             kept.append(c)
         else:
@@ -215,20 +220,10 @@ def _guess_band(item: Any, bands: dict[str, Any]) -> str:
     return "sap_tool_standard" if standard else sorted(bands)[0]
 
 
-# Planning-level person-days for an integration whose estimate the agent left out (it sent 0 for all six
-# rows in the second live run); inside the policy band third_party_integration (10-60).
-INTEGRATION_DEFAULT_DAYS = {"Low": 10, "Medium": 20, "High": 40}
-
-
 def _integrations(v: Verdict, ctx: ValidationContext) -> None:
     if not v.row.system.strip():
         v.errors.append("system name is required")
-    if not v.row.effort_days or v.row.effort_days <= 0:
-        days = INTEGRATION_DEFAULT_DAYS.get(v.row.complexity, 20) * max(int(v.row.interface_count or 1), 1)
-        v.notes.append(f"effort_days missing for {v.row.system}; set to {days} PD ({v.row.complexity} complexity "
-                       f"x {max(int(v.row.interface_count or 1), 1)} interface(s)) - give your own estimate if you have one")
-        v.row.effort_days = float(min(days, 500))
-    elif v.row.effort_days > 500:
+    if not (0 < v.row.effort_days <= 500):
         v.errors.append("effort_days must be > 0 and <= 500 (skill effort guide)")
     _check_evidence(v, ctx)
 
@@ -333,25 +328,6 @@ def _wave_plan(v: Verdict, ctx: ValidationContext) -> None:
             v.errors.append(f"tag {tag.row_id}: no such scope_items row")
         elif tag.country and tag.country not in item.countries:
             v.errors.append(f"tag {tag.row_id}: {item.scope_item_id} is not delivered in {tag.country}")
-    dm_ids = {r.row_id for r in ctx.ledger.data_migration.rows}
-    dm_keys = set(ctx.policy.workstreams["data_migration"]["effort_keys"])
-    seen_dm: set[str] = set()
-    for d in plan.data_migration_waves:
-        if d.wave not in waves:
-            v.errors.append(f"data_migration_waves: unknown wave '{d.wave}'; waves are {waves}")
-        if d.wave in seen_dm:
-            v.errors.append(f"data_migration_waves: '{d.wave}' given twice")
-        seen_dm.add(d.wave)
-        if not 0 < d.scale <= 10:
-            v.errors.append(f"data_migration_waves {d.wave}: scale {d.scale} must be > 0 and <= 10")
-        bad_keys = [k for k in d.key_scale if k not in dm_keys]
-        if bad_keys:
-            v.errors.append(f"data_migration_waves {d.wave}: unknown key_scale keys {bad_keys}; use {sorted(dm_keys)}")
-        if any(not 0 <= x <= 10 for x in d.key_scale.values()):
-            v.errors.append(f"data_migration_waves {d.wave}: key_scale factors must be 0-10")
-        unknown = [o for o in d.objects if o not in dm_ids]
-        if unknown:
-            v.errors.append(f"data_migration_waves {d.wave}: no data_migration rows {unknown[:10]}")
     for p in plan.phases:
         if p.wave not in waves:
             v.errors.append(f"phase plan for unknown wave '{p.wave}'")

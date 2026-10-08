@@ -15,8 +15,8 @@ metadata:
 
 # Wave planning
 
-You decide; the tools compute. You write one object - `wave_plan` - with four parts:
-`item_tags`, `allocations`, `phases` and `data_migration_waves`. Sizing then splits every workstream's person-days across
+You decide; the tools compute. You write one object - `wave_plan` - with three parts:
+`item_tags`, `allocations` and `phases`. Sizing then splits every workstream's person-days across
 the waves exactly (largest remainder, so nothing is lost or invented), builds a staffing grid per
 wave from your phase split, and prices it.
 
@@ -31,7 +31,7 @@ wave from your phase split, and prices it.
 
 ## Single wave
 If the timeline has one wave (or none), write only `phases` for it (and its duration if undated)
-with `allocations: []`, `item_tags: []` and `data_migration_waves: []`: everything belongs to that wave.
+with `allocations: []` and `item_tags: []`: everything belongs to that wave.
 
 ## item_tags - which wave delivers a catalogue line
 Tag a line when the RFP makes its wave unambiguous: the wave's countries / entities / units match
@@ -51,7 +51,7 @@ are fractions summing to 1 over the waves that do that work.
   reuse it (typical: 0.7-0.85 to the first wave of that scope, the rest spread by the roll-outs that
   add interfaces). A wave that adds its own systems (a country payroll, a local bank) takes more.
 - `data_migration` - each wave loads its own countries' data: proportional to the countries /
-  entities it carries (the per-wave tables in `data_migration_waves` take precedence for the split).
+  entities it carries.
 - `basis` - landscape set-up in the first wave; later waves a small share (transports, client copies).
 - `security` - role design in the first wave; later waves role mapping for new users.
 - `analytics` - by where the reporting scope is delivered; default with the first full wave.
@@ -59,27 +59,6 @@ are fractions summing to 1 over the waves that do that work.
 Write the reason in one line, grounded in the timeline or the RFP. A workstream with no allocation
 is spread by implementation weeks and flagged in the sizing notes - acceptable only when you have no
 basis to do better.
-
-## data_migration_waves - each wave's Data Migration table
-The Data Migration sheet has one conversion-object table per wave. The data-migration specialist
-wrote ONE base table (`ledger_read("data_migration")`): the objects and per-phase days for the
-FIRST wave. Every other wave's table is that base scaled to what THAT wave has to migrate - never a
-plain copy. Write one entry per wave (the first one too, normally `scale: 1.0`):
-`{wave, scale, key_scale?, objects?, rationale}`.
-- `scale` - the wave's data volume relative to the first wave, from its requirements in the
-  timeline / RFP: number of entities, company codes, plants, countries or sites it carries, record
-  volumes the RFP states, modules it adds. Two entities after a one-entity first wave -> about 2.0;
-  a single small site -> 0.5. Never 1.0 by default for every wave - justify each number.
-- `key_scale` (optional, per column) - what a roll-out reuses: templates and programs built in the
-  first wave make `func_spec` and `program_dev` smaller (e.g. 0.5) while the load iterations and
-  cutover follow the volume (`scale`). A wave that brings new source systems needs new programs
-  (`program_dev` >= 1).
-- `objects` (optional) - the data_migration row_ids this wave migrates, when the wave does not carry
-  every module (e.g. a wave without Transport Management does not migrate TM masters). Empty = all.
-The tool multiplies the base cells, snaps each to the allowed grid (0.5 / 1 / 2 / 3 / 4) and splits the
-Data Migration person-days across the waves exactly as these tables do. Without an entry, a wave's
-table is scaled by its `data_migration` allocation share relative to the first wave's, and without
-that it is a copy (flagged in the sizing notes). Single-wave programmes: omit it.
 
 ## phases - SAP Activate split per wave
 `{wave, phase_split: {Prepare, Explore, Realize, Deploy}, total_weeks?, hypercare_weeks?, rationale}`.
@@ -95,8 +74,7 @@ that it is a copy (flagged in the sizing notes). Single-wave programmes: omit it
 
 ## Rules
 - Use only wave names from the timeline; unknown names are rejected.
-- Never write person-days, FTE or costs; shares, tags and Data Migration scale factors are your only
-  quantities.
+- Never write person-days, FTE or costs; shares and tags are your only quantities.
 - Every allocation and phase entry carries a one-line rationale.
 - When done, reply with the plan in a few lines: tags (count), allocations (workstream -> shares),
-  phase splits, Data Migration scale per wave, sized waves and any doubt.
+  phase splits, sized waves and any doubt.

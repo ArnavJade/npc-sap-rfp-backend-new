@@ -17,31 +17,6 @@ metadata:
 Ported from section (D) of the old scope prompt and data_migration_scope.py. Table-reading rules:
 [reference/reading-tables.md](reference/reading-tables.md).
 
-## Detection procedure (mandatory - an empty section is the most common error)
-The first live runs left this section empty or short because the agent read one or two pages and
-stopped. So:
-1. Read the WHOLE RFP with `read_next_pages` (call it until it says the whole RFP is read). The write
-   tool refuses `rows=[]` until you have, and the harness sends you back if you stop early.
-2. While reading, note every candidate below with its page. Then grep for each signal word listed
-   below as a second pass (`grep(pattern="a|b|c", path="/rfp/")` - case-insensitive).
-3. Write what you found in batches of at most 10 rows.
-4. `rows=[]` is right only when no signal matched anywhere. Its none_reason must name the signal
-   words you searched and the pages you checked, e.g. "read p.1-52; grep 'basis|transport|backup|
-   BTP|Cloud Connector|go-live' - no Basis activity stated". A none_reason without this is rejected
-   in review.
-
-Signals (grep): `master`, `migration|migrate|conversion|legacy data|data load|cutover`, `MDG|master
-data governance|data domain`, `customer|vendor|supplier|material|business partner|bank|asset|cost
-center|profit center|GL account|BOM|routing|recipe|equipment|functional location|inspection`.
-
-A sentence like "masters will be migrated" names no object by itself, but it puts migration in
-scope: then the objects are the master data the RFP names in each in-scope module's scope (process
-tables, sub-process lists, MDG domains) - collect them from the whole RFP, area by area. The MM
-compulsory rule alone gives four rows whenever MM master data is in migration scope. A multi-module
-S/4HANA RFP with an MDG scope typically yields 40-80 objects (per module area plus every MDG domain
-entry); an empty data_migration section on an RFP with a data migration scope section is almost
-always a reading error.
-
 ## Where to look
 RFPs present migration scope in many ways, often several at once. Search the WHOLE RFP - prose,
 lists, `[EXTRACTED TABLE]` and `[EMBEDDED IMAGE]` blocks, PDF diagram text ("Start of picture
@@ -63,6 +38,23 @@ master-data rows / sub-processes name the objects:
   "Maintenance Plan /Item (MI)" are two entries). NOT MDG capabilities that are not data: workflows,
   approval rules, data quality / validation rules, replication, consolidation, mass processing, UI,
   governance processes.
+
+A migration section that only says "Masters" or "master data" names no object: the objects are
+listed elsewhere, usually in the per-module process tables or annexures. Go and find them there.
+
+## Procedure
+1. The pages in your brief are a starting point, not the boundary. Run ONE grep over /rfp/ (literal
+   words, `|` between them) for
+   `master data|masters|master record|migrat|conversion|data load|MDG`
+   and read (`read_section`) every page with a hit - each module's scope table usually has its own
+   master-data rows.
+2. Write each area's objects as soon as you have read them (batches of at most 10 rows); do not hold
+   everything back until the end.
+3. Before each later batch, `ledger_read("data_migration")` and send only objects not saved yet for
+   that area. A rejected row: fix it and resend THAT row only. A saved row to correct: resend it with
+   its `row_id`.
+4. `rows=[]` only when the grep found no object anywhere; the none_reason names the searches and
+   pages checked.
 
 ## Never qualifies
 - Transactional or balance data - open orders, open items, stock balances, GL balances, historical
@@ -101,12 +93,6 @@ not name, and mark all four `mm_compulsory: true` (the evidence rule exempts exa
 objects as usual with false. MM master data not in scope -> do not add them.
 
 ## Effort per phase (each value one of 0.5, 1, 2, 3, 4 - other values are snapped)
-You write ONE base table: the days for the FIRST (template) wave. Do not divide or multiply by the
-number of waves. The wave-planner sets how each later wave's table scales from yours (data volume,
-reused templates and programs, which objects the wave migrates) and the tool builds one table per wave.
-In `note`, record what the RFP says about volume per entity / site when it says anything (record
-counts, number of plants or company codes) - the wave-planner uses it.
-
 `func_spec` = functional spec / data template finalisation; `program_dev` = migration program
 development / changes; `iteration_1..3` = one mock-load iteration each (loading and changes after
 feedback); `cutover` = data cutover to production. Judge every object on its own merits from typical
@@ -126,5 +112,6 @@ migration scope", "generic mention, no object named", "MDG capability, not a dat
 
 ## Output
 `ledger_write_data_migration(rows=[...])`, every row (except MM compulsory additions) with verbatim
-evidence (file, page). No master data object in migration scope -> `rows=[]` with a none_reason.
-Fix and resend rejected rows.
+evidence (file, page). The identity of a row is (`module`, `object`): the same object under two
+areas is two rows, the same object twice under one area is a duplicate. No master data object in
+migration scope -> `rows=[]` with a none_reason. Fix and resend rejected rows only.

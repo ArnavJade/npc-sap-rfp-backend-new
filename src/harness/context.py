@@ -85,8 +85,6 @@ class RunContext:
     sink: ProgressSink | None = None
     _corpus: CorpusIndex | None = field(default=None, init=False, repr=False)
     _trace: Trace | None = field(default=None, init=False, repr=False)
-    _pages: list[tuple[str, int, int]] | None = field(default=None, init=False, repr=False)
-    pages_read: dict[str, set[tuple[str, int]]] = field(default_factory=dict, init=False, repr=False)
 
     @property
     def ledger(self) -> LedgerStore:
@@ -106,53 +104,6 @@ class RunContext:
 
     def reset_corpus(self) -> None:
         self._corpus = None
-        self._pages = None
-
-    # ------------------------------------------------------------------ RFP reading coverage
-    def rfp_pages(self) -> list[tuple[str, int, int]]:
-        """Every (file, page, characters) of the ingested RFP, in document order."""
-        if self._pages is None:
-            from bidcore.ingest.workspace import split_pages
-
-            pages: list[tuple[str, int, int]] = []
-            for path in sorted(self.ws.rfp.glob("*.md")):
-                if path.name == "index.md":
-                    continue
-                for number, body in split_pages(path.read_text(encoding="utf-8", errors="replace")):
-                    pages.append((path.name, number, len(body)))
-            self._pages = pages
-        return self._pages
-
-    def mark_read(self, agent: str, file: str, pages: list[int] | range) -> None:
-        name = file.replace("\\", "/").rsplit("/", 1)[-1]
-        if not name.endswith(".md"):
-            name += ".md"
-        seen = self.pages_read.setdefault(agent, set())
-        for page in pages:
-            seen.add((name, int(page)))
-
-    def unread_pages(self, agent: str) -> list[tuple[str, int]]:
-        seen = self.pages_read.get(agent, set())
-        return [(f, p) for f, p, _ in self.rfp_pages() if (f, p) not in seen]
-
-    def coverage(self, agent: str) -> float:
-        total = len(self.rfp_pages())
-        return 1.0 if not total else 1.0 - len(self.unread_pages(agent)) / total
-
-    def full_read_expected(self) -> bool:
-        """Small enough to read in full (old pipeline scanned every chunk of the RFP)."""
-        limit = int(self.policy.runtime.limits.get("full_read_max_chars", 200_000))
-        total = sum(chars for _, _, chars in self.rfp_pages())
-        return 0 < total <= limit
-
-    def coverage_gap(self, agent: str) -> str:
-        """'' when the agent read enough of the RFP to call a section empty / finish; else what is left."""
-        if not self.full_read_expected():
-            return ""
-        need = float(self.policy.runtime.limits.get("min_page_coverage", 0.9))
-        if self.coverage(agent) >= need:
-            return ""
-        return f"read {self.coverage(agent):.0%} of the RFP pages; unread: {page_ranges(self.unread_pages(agent))}"
 
     def validation(self, ledger: Ledger) -> ValidationContext:
         return ValidationContext(self.policy, self.catalogue, self.corpus(), ledger)
@@ -160,22 +111,3 @@ class RunContext:
     @property
     def team_config(self) -> dict[str, Any]:
         return self.policy.runtime.teams[self.team]
-
-
-def page_ranges(pages: list[tuple[str, int]]) -> str:
-    """[('a.md', 1), ('a.md', 2), ('a.md', 5)] -> 'a.md p.1-2, 5'."""
-    by_file: dict[str, list[int]] = {}
-    for f, p in pages:
-        by_file.setdefault(f, []).append(p)
-    parts = []
-    for f, nums in by_file.items():
-        nums = sorted(set(nums))
-        runs, start, prev = [], nums[0], nums[0]
-        for n in nums[1:]:
-            if n != prev + 1:
-                runs.append(f"{start}-{prev}" if start != prev else str(start))
-                start = n
-            prev = n
-        runs.append(f"{start}-{prev}" if start != prev else str(start))
-        parts.append(f"/rfp/{f} p.{', '.join(runs)}")
-    return "; ".join(parts) or "none"

@@ -5,6 +5,7 @@ LedgerGuardMiddleware - section-level ledger permissions. Each agent's toolbox a
   leaks into the wrong toolbox (e.g. inherited) still cannot write another agent's section.
 TraceMiddleware - one event per agent start/stop and per tool call into trace/events.jsonl and the
   job's live progress feed (replaces the old [*-TRACE] log tags with a single ordered record).
+LedgerBriefMiddleware - a fresh summary of the ledger an agent works from, in its system message.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import time
 from typing import Any, Awaitable, Callable
 
 from langchain.agents.middleware import AgentMiddleware
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 
 from harness.context import Trace
 from harness.observability import bind, error_info, llm_content_enabled, preview
@@ -178,6 +179,40 @@ class TraceMiddleware(AgentMiddleware):
                 raise
         self._emit(request, result, started)
         return result
+
+
+class LedgerBriefMiddleware(AgentMiddleware):
+    """Appends a fresh ledger brief to the agent's system message on every model call, so an agent that
+    works FROM the ledger (the catalogue-mapper) always has its inputs - the bid's ISO-2 countries and the
+    capability ids - instead of depending on whether it thinks to call ledger_read first. The third live
+    run's mapper never read the ledger: it invented 'KSA' / 'EGY' and capability ids and mapped nothing."""
+
+    def __init__(self, agent: str, brief: Callable[[], str]):
+        super().__init__()
+        self.agent = agent
+        self.brief = brief
+
+    def _with_brief(self, request: Any) -> Any:
+        try:
+            brief = self.brief()
+        except Exception:          # the brief is an aid: never fail a model call over it
+            return request
+        if not brief:
+            return request
+        system = request.system_message
+        if system is None:
+            new = SystemMessage(content=brief)
+        elif isinstance(system.content, str):
+            new = SystemMessage(content=f"{system.content}\n\n{brief}")
+        else:
+            new = SystemMessage(content=[*system.content, {"type": "text", "text": brief}])
+        return request.override(system_message=new)
+
+    def wrap_model_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        return handler(self._with_brief(request))
+
+    async def awrap_model_call(self, request: Any, handler: Callable[[Any], Awaitable[Any]]) -> Any:
+        return await handler(self._with_brief(request))
 
 
 def _tool_name(tool: Any) -> str:

@@ -18,37 +18,6 @@ metadata:
 Ported from section (A) of the old scope prompt
 (third_party_integration_extraction_layer.py) and its Tech Dev structuring prompt.
 
-## Detection procedure (mandatory - an empty section is the most common error)
-The first live runs left this section empty or short because the agent read one or two pages and
-stopped. So:
-1. Read the WHOLE RFP with `read_next_pages` (call it until it says the whole RFP is read). The write
-   tool refuses `rows=[]` until you have, and the harness sends you back if you stop early.
-2. While reading, note every candidate below with its page. Then grep for each signal word listed
-   below as a second pass (`grep(pattern="a|b|c", path="/rfp/")` - case-insensitive).
-3. Write what you found in batches of at most 10 rows.
-4. `rows=[]` is right only when no signal matched anywhere. Its none_reason must name the signal
-   words you searched and the pages you checked, e.g. "read p.1-52; grep 'basis|transport|backup|
-   BTP|Cloud Connector|go-live' - no Basis activity stated". A none_reason without this is rejected
-   in review.
-
-Signals (grep): `integrat`, `interface`, `legacy`, `third party|3rd party`, `non-SAP`, `API|REST|
-SOAP|OData|SFTP|EDI|IDoc`, `middleware|CPI|Integration Suite|PI/PO`, `landscape`, `bank|SWIFT`,
-`e-invoic|ZATCA|tax authority|ministry`, `Active Directory`, `portal`.
-
-Call `integration_candidates()` FIRST: it lists the table-scan candidates, every diagram text block
-and the list lines of every page about integrations, interfaces or legacy applications. Then:
-- every non-SAP application in a "legacy applications" / "current landscape" / "integrations
-  required" list that must keep running next to SAP is a row (an application being REPLACED by SAP
-  is not);
-- every non-SAP name in an integration diagram (jumbled box labels - split them into names) is a row;
-- government / bank / tax gateways (e-invoicing authority, ministry portals, SWIFT / bank networks),
-  identity directories (Active Directory), document management (OpenText) and work-management tools
-  (JIRA) count when the RFP connects them to SAP.
-After each write the tool lists table-scan candidates no row covers yet - add them or say why not.
-A client with a legacy-application annexure typically has 15-30 third-party rows; 5 or fewer usually
-means a list was missed. Always give `effort_days` (a missing one is set to a Low 10 / Medium 20 /
-High 40 PD default per interface).
-
 ## Where to look
 Read the whole RFP, not only an obviously-titled integration section. Integration modules,
 interface counts and complexity splits are VERY OFTEN shown only inside `[EMBEDDED IMAGE]` blocks
@@ -64,6 +33,26 @@ lines like:
 
 Treat these blocks with the same rigor as prose and do not skip them. `/rfp/index.md` lists the
 deterministic table scan's third-party candidates - check every one, but decide on the RFP text.
+
+The richest source is often NOT the integration diagram but an inventory table of the client's
+existing / legacy applications (an annexure such as "Legacy applications details & integrations
+required", "Existing systems", "Application landscape"): one row per system with its function, the
+SAP modules it touches and often a number of interfaces. Every row of such a table that must be
+integrated with SAP is one integration row, with that number as `interface_count`.
+
+## Procedure
+1. The pages in your brief are a starting point, not the boundary. Run ONE grep over /rfp/ (literal
+   words, `|` between them) for
+   `integrat|interface|legacy|third party|third-party|3rd party|existing system|existing application|landscape|middleware`
+   and read (`read_section`) every page with a hit, tables and diagram text included.
+2. Write each source's systems as soon as you have read it (batches of at most 10 rows); do not hold
+   everything back until the end.
+3. Before each later batch, `ledger_read("integrations")`. A system already saved is NOT sent again
+   as a new row: to add facts from another source (interface count, middleware), resend that row
+   with its `row_id`. Names that differ only by case, punctuation, a company prefix or a suffix such
+   as "DB", "system" or "app" are the same system. A rejected row: fix it and resend THAT row only.
+4. `rows=[]` only when the grep found no third-party system anywhere; the none_reason names the
+   searches and pages checked.
 
 ## What qualifies
 Every THIRD-PARTY INTEGRATION MODULE or SYSTEM the RFP mentions: any external, non-SAP vendor
@@ -113,8 +102,12 @@ complexity: a simple REST / file-based interface costs far less than a real-time
 interface touching several SAP modules. Name the driver in `complexity_driver` / `rationale` so the
 figure reads as auditable. When the RFP gives no complexity signal, still give your best
 planning-level estimate - never leave it blank. Policy band `third_party_integration`: 10-60 PD;
-go above 60 only with several stated interfaces to the same system (max 500).
+go above 60 only with several stated interfaces to the same system (max 500). Effort grows with the
+interface count but much less than proportionally - interfaces to one system share design, mapping,
+connectivity and test set-up. Illustrative only: 1 interface 10-15; about 5-10 interfaces 20-35;
+about 20 interfaces 50-70; 50 or more 100-160.
 
 ## Output
 `ledger_write_integrations(rows=[...])`. No third-party integration in the RFP -> `rows=[]` with a
-none_reason naming what you checked. Fix and resend every rejected row; never drop one silently.
+none_reason naming what you checked. Fix and resend every rejected row (only the rejected ones);
+never drop one silently.

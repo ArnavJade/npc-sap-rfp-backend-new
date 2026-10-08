@@ -17,27 +17,6 @@ metadata:
 
 Ported from section (G) of the old scope prompt and analytics_scope.py.
 
-## Detection procedure (mandatory - an empty section is the most common error)
-The first live runs left this section empty or short because the agent read one or two pages and
-stopped. So:
-1. Read the WHOLE RFP with `read_next_pages` (call it until it says the whole RFP is read). The write
-   tool refuses `rows=[]` until you have, and the harness sends you back if you stop early.
-2. While reading, note every candidate below with its page. Then grep for each signal word listed
-   below as a second pass (`grep(pattern="a|b|c", path="/rfp/")` - case-insensitive).
-3. Write what you found in batches of at most 10 rows.
-4. `rows=[]` is right only when no signal matched anywhere. Its none_reason must name the signal
-   words you searched and the pages you checked, e.g. "read p.1-52; grep 'basis|transport|backup|
-   BTP|Cloud Connector|go-live' - no Basis activity stated". A none_reason without this is rejected
-   in review.
-
-Signals (grep): `analytic`, `dashboard`, `KPI`, `BI|business intelligence`, `SAC|Analytics Cloud`,
-`BW|Datasphere|BusinessObjects`, `embedded analytics|CDS`, `management reporting|performance
-management|insight`, `reporting and analytics|analytics and reporting`.
-
-Per-module scope tables (annexures listing each module's processes) often carry lines or areas
-titled as analytics / reporting deliverables ("Treasury Analytics and Reporting", "Performance
-Management Reporting & Analytics"): each such line is one Report row, even without a product name.
-
 ## What counts
 Named SAP ANALYTICS / BI deliverables in scope: SAP Analytics Cloud (stories, dashboards, planning
 models), SAP BW/4HANA or BW (models, cubes, datamarts, queries), SAP Datasphere, SAP BusinessObjects,
@@ -50,7 +29,22 @@ ABAP / ALV / custom operational reports and forms (RICEFW - scope-ricefw-fiori),
 are part of a module's business process ("Perform Financial Reporting", "VAT Reporting", "MIS
 Reporting"), group-reporting consolidation functionality, non-SAP BI tools (Qlik, Power BI, Tableau -
 third-party integrations), marketing statements about the platform's analytics, project-management
-reporting.
+reporting, custom Fiori applications (scope-ricefw-fiori), and Finance close / consolidation process
+lines such as financial statements, disclosure or segment reporting (catalogue scope).
+
+## Procedure
+1. The pages in your brief are a starting point, not the boundary. Run ONE grep over /rfp/ (literal
+   words, `|` between them) for
+   `analytic|dashboard|KPI|business intelligence|Analytics Cloud|BW/4|BusinessObjects|Datasphere|CDS view|insight`
+   and read (`read_section`) every page with a hit. Per-module scope tables (annexures listing each
+   module's processes) are where the titled lines usually sit.
+2. In those tables, a line or area whose OWN title names analytics, dashboards or KPIs as the thing
+   delivered ("<Area> Analytics and Reporting", "<Area> Dashboards") is one Report row; a process
+   line that merely mentions reporting is not.
+3. Before a later batch, `ledger_read("analytics")` and send only objects not saved yet. A rejected
+   row: fix it and resend THAT row only.
+4. `rows=[]` only when the grep found nothing that qualifies; the none_reason names the searches and
+   pages checked.
 
 ## Evidence
 STRICT: list a deliverable ONLY when the RFP states it or puts its SAP product in scope; nothing from
@@ -82,4 +76,4 @@ or report is NOT a whole exclusion - mark that object Out of Scope instead. Sile
 ## Output
 `ledger_write_analytics(rows=[...])` (or `rows=[]` with a none_reason), and
 `ledger_write_analytics_scope(data={...})` only for an explicit whole-scope exclusion. Fix and resend
-rejected rows.
+rejected rows only.

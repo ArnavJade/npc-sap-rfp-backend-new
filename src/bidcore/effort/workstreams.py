@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Iterable, Mapping
-from typing import Sequence, Any
+from typing import Any
 
 from bidcore.effort.models import WorkstreamTables
 from bidcore.ledger.sections_effort import (
@@ -113,27 +113,14 @@ def build_workstream_tables(
     analytics_scope: AnalyticsScope | None,
     wave_count: int,
     policy: Policy | None = None,
-    dm_waves: Sequence[Any | None] | None = None,
-    dm_fallback_scales: Sequence[float] | None = None,
 ) -> WorkstreamTables:
-    """Row tables of the four specialist sheets (shapes per the WorkstreamTables docstring).
-
-    Data Migration has one table per delivery wave. The ledger rows are the BASE table (what the first /
-    template wave migrates); wave i's table is the base scaled to what wave i migrates
-    (`scale_dm_table`): from the wave plan's `data_migration_waves[i]` when given, else by the wave's
-    data_migration allocation share relative to the first wave (`dm_fallback_scales`), else a copy."""
+    """Row tables of the four specialist sheets (shapes per the WorkstreamTables docstring)."""
     p = policy or get_policy()
     ws = p.workstreams
     dm_keys = list(ws["data_migration"]["effort_keys"])
     dm_rows = [_dm_row(row, dm_keys) for row in data_migration]
-    count = max(int(wave_count or 0), 1)
-    tables, notes = [], []
-    for index in range(count):
-        plan = dm_waves[index] if dm_waves and index < len(dm_waves) else None
-        fallback = dm_fallback_scales[index] if dm_fallback_scales and index < len(dm_fallback_scales) else 1.0
-        table, note = scale_dm_table(dm_rows, plan, fallback, index, p)
-        tables.append(table)
-        notes += note
+    # One table per delivery wave, each its own copy so scope sync can resize one wave independently.
+    tables = [copy.deepcopy(dm_rows) for _ in range(max(int(wave_count or 0), 1))]
 
     basis_rows = [{"row_id": r.row_id, "activity": r.activity.strip(), "status": r.status,
                    **{k: (getattr(r, k) if r.status == IN_SCOPE else None) for k in BASIS_KEYS}}
@@ -156,44 +143,7 @@ def build_workstream_tables(
         analytics_rows.append({**marker, **analytics_object_effort(marker, p)})
 
     return WorkstreamTables(data_migration=tables, basis=basis_rows, security=security_rows,
-                            analytics=analytics_rows, analytics_excluded=excluded, notes=notes)
-
-
-def scale_dm_table(base: list[dict[str, Any]], plan: Any | None, fallback_scale: float, index: int,
-                   policy: Policy | None = None) -> tuple[list[dict[str, Any]], list[str]]:
-    """One wave's Data Migration table from the base table: only the objects the wave migrates, every
-    effort cell x the wave's factor (per column when `key_scale` gives one), snapped to the allowed
-    grid (0.5 / 1 / 2 / 3 / 4; a factor of 0 empties the cell). Returns (rows, notes)."""
-    p = policy or get_policy()
-    spec = p.workstreams["data_migration"]
-    keys, allowed = list(spec["effort_keys"]), [float(a) for a in spec["allowed_effort_days"]]
-    scale = float(plan.scale) if plan is not None else float(fallback_scale or 1.0)
-    key_scale = dict(plan.key_scale) if plan is not None else {}
-    wanted = set(plan.objects) if plan is not None and plan.objects else None
-    rows, clamped = [], 0
-    for row in base:
-        if wanted is not None and row["row_id"] not in wanted:
-            continue
-        out = copy.deepcopy(row)
-        for key in keys:
-            factor = float(key_scale.get(key, scale))
-            value = float(row.get(key) or 0.0) * factor
-            if factor <= 0 or value <= 0:
-                out[key] = 0.0
-                continue
-            if value > max(allowed):
-                clamped += 1
-            out[key] = dm_snap_effort(value, max(allowed), p)
-        rows.append(out)
-    notes = []
-    source = "wave plan" if plan is not None else ("allocation share" if fallback_scale != 1.0 else "copy of the base")
-    if index or plan is not None:
-        notes.append(f"Data Migration table {index + 1}: {len(rows)} object(s), scale {scale:g} ({source})"
-                     + (f", per-column {key_scale}" if key_scale else ""))
-    if clamped:
-        notes.append(f"Data Migration table {index + 1}: {clamped} cell(s) capped at {max(allowed):g} PD "
-                     "(the allowed grid); the wave needs more than the grid can show")
-    return rows, notes
+                            analytics=analytics_rows, analytics_excluded=excluded)
 
 
 def workstream_totals(tables: WorkstreamTables, policy: Policy | None = None) -> dict[str, float]:

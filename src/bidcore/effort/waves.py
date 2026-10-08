@@ -173,13 +173,6 @@ def allocate_waves(effort: EffortModel, timeline: ResolvedTimeline, wave_plan: W
     if n > 1 and not plan:
         flags.append("no usable wave-plan allocations; every workstream spread by implementation weeks")
     by_duration = duration_weights(waves)
-    # Data Migration has one table per wave, already scaled to what each wave migrates: its person-days
-    # are split exactly as the tables split them (the grid then matches the sheet, and scope sync only
-    # has rounding left to absorb).
-    dm_tables = effort.workstreams.data_migration
-    dm_keys = p.workstreams["data_migration"]["effort_keys"]
-    dm_split = [sum(float(row.get(k) or 0.0) for row in table for k in dm_keys) for table in dm_tables] \
-        if len(dm_tables) == n else []
 
     per_ws: dict[str, list[float]] = {}
     got: dict[str, set[int]] = {"plan": set(), "tagged": set(), "duration": set()}
@@ -188,8 +181,6 @@ def allocate_waves(effort: EffortModel, timeline: ResolvedTimeline, wave_plan: W
         remaining = max(round(total - sum(direct), 2), 0.0)
         if n == 1:                                           # (d)
             weights, how = [1.0], "plan"
-        elif ws == "data_migration" and sum(dm_split) > 0:   # per-wave tables
-            weights, how = dm_split, "plan"
         elif ws in plan:                                     # (b)
             weights, how = plan[ws], "plan"
         else:                                                # (c)

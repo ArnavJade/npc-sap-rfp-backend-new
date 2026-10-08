@@ -104,7 +104,6 @@ class WorkstreamTables(BaseModel):
     security: list[dict] = Field(default_factory=list)
     analytics: list[dict] = Field(default_factory=list)
     analytics_excluded: bool = False
-    notes: list[str] = Field(default_factory=list)          # how each wave's Data Migration table was scaled
 
 
 class EffortModel(BaseModel):
