@@ -54,6 +54,7 @@ class TableManifest(BaseModel):
     columns: dict[int, ColumnRef]
     rows: dict[str, dict[str, Any]] = Field(default_factory=dict)
     wave: str = ""
+    skip_labels: list[str] = Field(default_factory=list)   # band / subtotal rows inside the table
 
 
 class RenderManifest(BaseModel):
@@ -153,6 +154,10 @@ def _diff_table(ws, table: TableManifest) -> list[Override]:
             break
         values = {c: ws.cell(row=row, column=c).value for c in table.columns}
         row_id = str(ws.cell(row=row, column=table.row_id_col).value or "").strip()
+        first_text = next((str(v).strip() for v in values.values() if v is not None and str(v).strip()), "")
+        if not row_id and (str(label or "").strip() in table.skip_labels or first_text in table.skip_labels):
+            row += 1
+            continue
         if not row_id and all(v is None or str(v).strip() == "" for v in values.values()):
             blank_run += 1
             row += 1

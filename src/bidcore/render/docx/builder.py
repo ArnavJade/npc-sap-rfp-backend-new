@@ -26,8 +26,10 @@ from pathlib import Path
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.enum.section import WD_ORIENT, WD_SECTION
 from docx.shared import Inches, Pt, RGBColor, Twips
 
+from bidcore.disclosure import filter_table_columns
 from bidcore.drafts import PLACEHOLDER_RE
 from bidcore.figures import compute_figures, withheld_keys
 from bidcore.ledger.models import Ledger
@@ -35,7 +37,7 @@ from bidcore.outline import OutlineSection, merged_outline
 from bidcore.paths import assets_dir, templates_dir
 from bidcore.policy import Policy, get_policy
 from bidcore.render.docx.diagrams import draw
-from bidcore.render.docx.tables import TableData, build_table
+from bidcore.render.docx.tables import TableData, build_tables
 from bidcore.sizing import SizingResult
 
 log = logging.getLogger(__name__)
@@ -92,7 +94,7 @@ class _Writer:
             return str(value)
         return PLACEHOLDER_RE.sub(sub, text)
 
-    def artifact(self, key: str) -> None:
+    def artifact(self, key: str, combine_resource_effort: bool = True) -> None:
         if key in self.placed:
             return
         if key in self.blocked:
@@ -100,15 +102,29 @@ class _Writer:
             return
         kind, _, name = key.partition(":")
         if kind == "table":
-            data = build_table(name, self.ledger, self.sizing, self.withheld)
-            if data is not None and data.rows:
-                self.table(data)
+            tables = build_tables(name, self.ledger, self.sizing, self.withheld, combine_resource_effort)
+            for data in tables:
+                if data.rows:
+                    self.table(data)
+            if tables:
                 self.placed.add(key)
+            self.orientation(landscape=False)
         elif kind == "diagram":
             png = draw(name, self.ledger, self.sizing)
             if png:
                 self.doc.add_picture(io.BytesIO(png), width=Inches(6.3))
                 self.placed.add(key)
+
+    def orientation(self, landscape: bool) -> None:
+        """Old _add_data_table(landscape=True): wide month grids sit in their own landscape section."""
+        current = self.doc.sections[-1]
+        if (current.orientation == WD_ORIENT.LANDSCAPE) == landscape:
+            return
+        section = self.doc.add_section(WD_SECTION.NEW_PAGE)
+        width, height = current.page_width, current.page_height
+        section.orientation = WD_ORIENT.LANDSCAPE if landscape else WD_ORIENT.PORTRAIT
+        if (width > height) != landscape:
+            section.page_width, section.page_height = height, width
 
     # ---------------------------------------------------------------- blocks
     def heading(self, text: str, level: int) -> None:
@@ -143,34 +159,67 @@ class _Writer:
             else:
                 para.add_run(part)
 
+    def _small(self, text: str, italic: bool = False) -> None:
+        run = self.doc.add_paragraph().add_run(text)
+        run.font.size = Pt(9 if italic else 9.5)
+        if italic:
+            run.italic = True
+            run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+
     def table(self, data: TableData) -> None:
-        caption = self.doc.add_paragraph(style=self._style("Caption"))
-        caption.add_run(data.title).bold = True
-        table = self.doc.add_table(rows=1, cols=len(data.headers))
+        self.orientation(data.landscape)
+        if data.subheading:
+            self.heading(data.subheading, 3)
+        if data.intro:
+            self._small(data.intro)
+        if data.title:
+            caption = self.doc.add_paragraph(style=self._style("Caption"))
+            caption.add_run(data.title).bold = True
+        cols = len(data.headers)
+        table = self.doc.add_table(rows=0, cols=cols)
         if self._style("Table Grid", ""):
             table.style = "Table Grid"
-        for cell, text in zip(table.rows[0].cells, data.headers):
+        header_rows = 0
+        if data.top_header:
+            cells = table.add_row().cells
+            merged = cells[0].merge(cells[-1]) if cols > 1 else cells[0]
+            merged.text = ""
+            run = merged.paragraphs[0].add_run(data.top_header)
+            run.bold, run.font.size = True, Pt(9)
+            _shade(merged, "D9E1F2")
+            header_rows += 1
+        cells = table.add_row().cells
+        for cell, text in zip(cells, data.headers):
             cell.text = ""
             run = cell.paragraphs[0].add_run(text)
             run.bold, run.font.size, run.font.color.rgb = True, Pt(9), RGBColor(0xFF, 0xFF, 0xFF)
             _shade(cell, "1F4E78")
+        header_rows += 1
+        if data.band_row:
+            for cell, text in zip(table.add_row().cells, data.band_row):
+                cell.text = ""
+                run = cell.paragraphs[0].add_run(str(text))
+                run.italic, run.font.size = True, Pt(8)
+                _shade(cell, "DDEBF7")
         for i, row in enumerate(data.rows):
-            cells = table.add_row().cells
-            last = data.total_row and i == len(data.rows) - 1
-            for cell, text in zip(cells, row):
+            strong = i in data.subtotal_rows
+            for cell, text in zip(table.add_row().cells, row):
                 cell.text = ""
                 run = cell.paragraphs[0].add_run(str(text))
                 run.font.size = Pt(9)
-                if last:
+                if strong:
                     run.bold = True
                     _shade(cell, "D9E1F2")
-        _repeat_header(table)
-        if data.widths and len(data.widths) == len(data.headers):
-            total = sum(data.widths)
+        for index in range(header_rows):
+            _repeat_header(table, index)
+        if data.widths and len(data.widths) == cols:
             for row in table.rows:
                 for cell, w in zip(row.cells, data.widths):
-                    cell.width = Inches(6.5 * w / total)
-        self.doc.add_paragraph()
+                    cell.width = Inches(w)
+        if data.note:
+            self._small(data.note, italic=True)
+        else:
+            self.doc.add_paragraph()
 
     def markdown(self, text: str, level: int) -> None:
         lines = text.replace("\r\n", "\n").split("\n")
@@ -204,7 +253,10 @@ class _Writer:
                         rows.append([self.resolve_figures(c) for c in cells])
                     i += 1
                 if len(rows) >= 2:
-                    self.table(TableData("", rows[0], rows[1:]))
+                    headers, body, dropped = filter_table_columns(rows[0], rows[1:], self.withheld)
+                    self.dropped += [f"column:{d}" for d in dropped]
+                    if len(headers) > 1 or not dropped:
+                        self.table(TableData("", headers, body))
                 continue
             heading = _HEADING_RE.match(stripped)
             if heading:
@@ -241,8 +293,8 @@ def _shade(cell, hex_colour: str) -> None:
     tc_pr.append(shading)
 
 
-def _repeat_header(table) -> None:
-    tr_pr = table.rows[0]._tr.get_or_add_trPr()
+def _repeat_header(table, index: int = 0) -> None:
+    tr_pr = table.rows[index]._tr.get_or_add_trPr()
     header = OxmlElement("w:tblHeader")
     header.set(qn("w:val"), "true")
     tr_pr.append(header)
@@ -306,7 +358,7 @@ def render_proposal(ledger: Ledger, sizing: SizingResult, drafts_dir: Path, out:
             run = para.add_run(MISSING_DRAFT_TEXT)
             run.italic, run.font.color.rgb = True, RGBColor(0xC0, 0x00, 0x00)
         if section.artifact:
-            writer.artifact(section.artifact)
+            writer.artifact(section.artifact, section.combine_resource_effort)
     if writer.dropped:
         log.info("disclosure withheld: %s", sorted(set(writer.dropped)))
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -58,6 +58,9 @@ TABLE_KINDS = ("indicative_breakdown", "phase_plan")
 DEFAULT_ANCHOR = {"indicative_breakdown": "6.1", "phase_plan": "4.3", "narrative": "6.1"}
 CLIENT_WORDS = {"narrative": [80, 150], "indicative_breakdown": [30, 90], "phase_plan": [50, 200]}
 ADDITIONAL_ID = "additional"
+# A mapped requirement that names any of these turns the section's combined resource/effort view on.
+RESOURCE_EFFORT_CUES = ("resource", "staffing", "fte", "man-month", "man month", "manmonth", "team size",
+                        "headcount", "role-wise", "role wise", "person-month")
 
 
 def merged_outline(ledger: Ledger) -> list[OutlineSection]:
@@ -87,6 +90,8 @@ def merged_outline(ledger: Ledger) -> list[OutlineSection]:
         target = valid(req.maps_to_section_id)
         if req.kind not in TABLE_KINDS and target:
             by_id[target].briefs.append(f"Client requirement '{req.title}': {req.intent}")
+            if any(cue in f"{req.title} {req.intent}".lower() for cue in RESOURCE_EFFORT_CUES):
+                by_id[target].combine_resource_effort = True
             continue
         anchor = (valid(req.placement_after_section_id) or target or DEFAULT_ANCHOR[req.kind])
         anchor = anchor if anchor in by_id else sections[-1].id
