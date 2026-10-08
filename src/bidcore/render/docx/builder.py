@@ -295,7 +295,9 @@ def render_proposal(ledger: Ledger, sizing: SizingResult, drafts_dir: Path, out:
 
     sections: list[OutlineSection] = merged_outline(ledger)
     for section in sections:
-        writer.heading(section.title, section.level)
+        # Heading 3 is not auto-numbered in the template: client-required subsections carry their id.
+        title = f"{section.id} {section.title}" if section.client_required else section.title
+        writer.heading(title, section.level)
         text = _draft(drafts_dir, section.id) if section.narrative else None
         if text is not None:
             writer.markdown(text.strip(), section.level)

@@ -54,8 +54,9 @@ def test_sections_in_outline_order_with_client_section(tmp_path):
     ledger, _, doc = _render(tmp_path)
     headings = [p.text for p in doc.paragraphs if p.style.name.startswith("Heading")]
     titles = [s.title for s in merged_outline(ledger)]
+    titles = [f"{s.id} {s.title}" if s.client_required else s.title for s in merged_outline(ledger)]
     assert [h for h in headings if h in titles] == titles
-    assert headings.index("Indicative effort by wave") == headings.index("Effort Estimation") + 1
+    assert headings.index("6.1.1 Indicative effort by wave") == headings.index("Effort Estimation") + 1
 
 
 def test_placeholders_resolved_and_artifacts_placed(tmp_path):

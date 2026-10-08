@@ -60,7 +60,7 @@ def proposal_scripts() -> dict:
             turn(call("write_draft", section_id="1.1",
                       markdown="ACME Foods wants one **global template** for finance."),
                  call("write_draft", section_id="6.2", markdown="Our price is {{fig:total_project_cost}}."),
-                 call("write_draft", section_id="R1", markdown="The table below shows the split by wave.")),
+                 call("write_draft", section_id="6.1.1", markdown="The table below shows the split by wave.")),
             turn(text="3 drafts."),
         ],
     }
@@ -82,7 +82,7 @@ def test_proposal_call_end_to_end(harness_env):  # noqa: F811
     assert any(o.kind == "setting" and o.field == "daily_rate_usd" and o.applied for o in ledger.overrides)
     assert (ws.notes / "reviewer-edits.md").is_file() and (ws.notes / "presales-instructions.md").is_file()
     assert ledger.response_requirements.data.disclosure.resource_location is False
-    assert {"1.1", "6.2", "R1"} <= {p.stem for p in ws.drafts.glob("*.md")}
+    assert {"1.1", "6.2", "6.1.1"} <= {p.stem for p in ws.drafts.glob("*.md")}
     assert state["missing"]                                  # the scripted writer skipped most sections
     doc = Document(state["document"])
     text = "\n".join(p.text for p in doc.paragraphs)

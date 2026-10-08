@@ -2,7 +2,7 @@
 
 The requirements-analyst records what the client's RFP explicitly asks the response to contain.
 A requirement either maps onto a standard section (it arrives in that section's briefs) or becomes
-a NEW subsection (id `R<n>`, level 3) placed after its anchor section. You draft new subsections
+a NEW subsection (id `<anchor>.<n>`, level 3, e.g. `6.1.1`) placed right after its anchor section. You draft new subsections
 like any other section, with these additions per `kind`.
 
 ## kind: narrative
