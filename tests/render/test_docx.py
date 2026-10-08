@@ -56,7 +56,10 @@ def test_sections_in_outline_order_with_client_section(tmp_path):
     titles = [s.title for s in merged_outline(ledger)]
     titles = [f"{s.id} {s.title}" if s.client_required else s.title for s in merged_outline(ledger)]
     assert [h for h in headings if h in titles] == titles
-    assert headings.index("6.1.1 Indicative effort by wave") == headings.index("Effort Estimation") + 1
+    # right after its anchor's content (incl. the anchor's table subheadings), before the next section
+    i, anchor, nxt = (headings.index(h) for h in ("6.1.1 Indicative effort by wave", "Effort Estimation",
+                                                  "Cost Estimates"))
+    assert anchor < i < nxt
 
 
 def test_placeholders_resolved_and_artifacts_placed(tmp_path):
@@ -65,9 +68,11 @@ def test_placeholders_resolved_and_artifacts_placed(tmp_path):
     assert "{{" not in text
     assert f"{sizing.summary.total_project_effort:,.2f}".rstrip("0").rstrip(".") in text
     assert MISSING_DRAFT_TEXT in text                       # sections without drafts are flagged
-    table_titles = [p.text for p in doc.paragraphs if p.style.name == "Caption"]
-    assert table_titles.count("Delivery waves") == 1          # placed inline, not repeated as the artifact
-    assert "Effort estimate" in table_titles and "Cost estimate (USD)" in table_titles
+    headers = [[c.text for c in t.rows[0].cells] for t in doc.tables]
+    wave_plan = ["Wave", "Countries", "Starts", "Duration (weeks)", "Hypercare (weeks)", "Go-live"]
+    assert headers.count(wave_plan) == 1                     # placed inline, not repeated as the artifact
+    assert ["Item", "Value"] in headers                      # 6.2 cost roll-up
+    assert ["Module", "Business Area", "BP ID Count", "Total Effort (Person Days)"] in headers   # 6.1
     assert len(doc.inline_shapes) == 3                         # methodology, architecture, timeline
 
 
@@ -75,6 +80,8 @@ def test_disclosure_withholds_commercials(tmp_path):
     _, _, doc = _render(tmp_path, Disclosure.full().model_copy(update={"commercial_detail": False, "effort_detail": False}))
     text = _text(doc)
     assert WITHHELD_FIGURE_TEXT in text
-    captions = [p.text for p in doc.paragraphs if p.style.name == "Caption"]
-    assert "Cost estimate (USD)" not in captions and "Effort estimate" not in captions
-    assert "Indicative effort by wave" not in captions
+    headers = [[c.text for c in t.rows[0].cells] for t in doc.tables]
+    assert ["Item", "Value"] not in headers                              # cost withheld
+    assert ["Module", "Business Area", "BP ID Count"] in headers         # 6.1 without its effort column
+    assert ["Wave", "Effort (Person Days)"] not in headers               # breakdown withheld
+    assert not any(any("Effort" in h for h in row) for row in headers)

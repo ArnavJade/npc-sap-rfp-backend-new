@@ -90,8 +90,7 @@ def test_proposal_call_end_to_end(harness_env):  # noqa: F811
     cost = ledger.figures["fig"]["total_project_cost"]
     assert f"Our price is {cost}." in text
     assert size_bid(ledger).summary.daily_rate_usd == 350    # the reviewer's rate reached the document
-    captions = [p.text for p in doc.paragraphs if p.style.name == "Caption"]
-    assert "Indicative effort by wave" in captions
     headers = [[c.text for c in t.rows[0].cells] for t in doc.tables]
-    assert ["Role", "Waves"] in headers                      # roster kept, Location column withheld
+    assert ["Wave", "Effort (Person Days)"] in headers                    # client-required breakdown
+    assert ["Role", "Wave 1", "Wave 2", "Total Man-months"] in headers     # roster kept, Location withheld
     assert not any("Location" in h for h in headers)

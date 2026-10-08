@@ -26,7 +26,7 @@ PoC **deviates** from that plan, what exists, and what is left.
 | Calls | Two calls + human review: (1) RFP → ledger → effort workbook; (2) reviewed workbook (+RFP) → diff via hidden `_bid` sheet → ledger → YASH .docx. |
 | Wave effort | **Agent allocates, tools compute**: `wave-planner` writes `ledger.wave_plan` (item tags, per-workstream wave shares, per-wave phase split starting from SAP Activate .08/.18/.50/.14 relative, durations for undated waves); deterministic code turns it into person-days/FTE (largest remainder, exact sums). Replaces old heuristic `wave_attribution_layer4`. |
 | PDF parsing | `pymupdf4llm` default, pluggable (`INGEST_PDF_ENGINE=docling` optional extra). **AGPL licence — review before production.** |
-| Workbook | **Full parity** with today's 11 sheets (Summary of Project Effort, Functional Scope Estimation, Project Timeline grids+reconciliation, one sheet per LOB, Non Catalogue SAP Tools, Tech Dev Scope, Data Migration per wave, Basis, Security, Analytics) + hidden `_bid`. Built from a static `template.xlsx` (styles/headers/static formulas/prototype rows) + a small openpyxl filler. No agent-driven file editing. |
+| Workbook | **Full parity** with today's sheets (Summary of Project Effort, Functional Scope Estimation, Project Timeline grids+reconciliation, one sheet per LOB, Non Catalogue SAP Tools, Tech Dev Scope, Data Migration per wave, Basis, Security, Analytics) + hidden `_bid`. Written directly by an openpyxl filler ported from the old writers (the prototype-row template idea was dropped: the old sheets are too heterogeneous). No agent-driven file editing. |
 | Word | **Full 42-section outline**, `docxtpl` template derived from `YASH_RFP_Template.docx`; narrative sections drafted in parallel by `section-writer` subagents as figure-free Markdown with `{{fig:..}}/{{table:..}}/{{diagram:..}}` placeholders resolved from the ledger. |
 | Rate card | Sum all 5 phases (old behaviour); the SAP BP sheet's own Total formula omits UAT — deliberately ignored. |
 | Platform | **Keep SharePoint (upload session > 4 MB) + Activity API.** Drop team model-config DB, KMS, S3 (local storage under `workspace/bids/<bid_id>/`). |
@@ -34,46 +34,39 @@ PoC **deviates** from that plan, what exists, and what is left.
 
 ## State (2026-10-08, branch `claude/keen-ride-iyeyve`)
 
-Development of every component on the "what is left" list is done. Tests exist for each part but the
-last round was written without being re-run (on request: finish development first, then test).
-Data correctness has not been reviewed.
+All development items are done and the old agent (npc-dev @ 67b88e6, provided as a zip) has been
+ported where the plan said "port". Full suite: 157 tests pass (incl. LibreOffice recalculation of the
+workbook formulas). Data correctness has not been reviewed (see open items).
 
 | Area | Where | State |
 |---|---|---|
-| Ingestion | `bidcore/ingest/{pdf,office,workspace}.py` | done: PDF/DOCX/PPTX/XLSX/CSV/TXT/MD -> `rfp/<slug>.md` with `<!-- page: N -->`, `index.md` (outline, tables, wave anchors, 3rd-party candidates) rebuilt from all files, `read_section`, `list_pages`, caption cache, `cache/prescan.json` |
-| Sizing | `bidcore/sizing.py` | honours reviewer overrides: catalogue phase cells / factor / wave / deletions, Tech Dev edits / deletions / additions, Summary %/rates, hypercare setting, grid FTE cells |
-| Workbook | `bidcore/render/workbook/` | layout registry (`layout.py`), template builder + `assets/templates/template.xlsx` (`scripts/build_templates.py`), filler with live formulas, hidden row-id columns, hidden `_bid`; manifest `ledger/manifest-<render_id>.json`; `read_edits` (by row id) + `apply_overrides` |
-| Docx | `bidcore/render/docx/` | python-docx on `YASH_RFP_Template.docx` (cover tokens incl. text boxes/TOC, `updateFields`, heading-indent fix), Markdown -> Word, ledger tables, matplotlib diagrams (timeline, methodology, architecture), disclosure filtering, red marker for missing drafts. Uses python-docx, not docxtpl (closer to the old generator) |
-| Outline | `bidcore/outline.py` | client-required placement rules from the proposal-outline skill (`<anchor>.<n>`, 4.3/6.1 fallbacks, `additional`) |
-| API | `src/app/` | `main.py`, `jobs/{store,runner}.py`, `api/bids.py` (`/bids`, `/bids/{id}/proposal`, `/proposals`, `/jobs/{id}`, ledger/file downloads), `api/platform.py` (`/pipeline/match/effort`, `/pipeline/generate/from-excel`, SharePoint + Activity, old body with `?wait=true`), `services.py` |
-| UI | `ui/streamlit_app.py` | call 1, call 2, bid list over the HTTP API (`API_URL`) |
-| CLI | `scripts/run_local.py` | `effort` / `proposal` without the API, live progress |
-| Container | `Dockerfile` | API image; UI runs from the same image |
-| Skills | `skills/` | all referenced skills exist: rfp-reading, sap-scope-mapping (ported earlier); estimating, wave-planning, client-requirements, bid-review, proposal-writing references (new); six `scope-*` skills **0.1.0-draft, not ported** (see open items) |
-| Tests | `tests/` | ingest, render (LibreOffice recalculation check), harness e2e for both calls with scripted models, API (both calls + platform routes), timeline, resourcing |
+| Ingestion | `bidcore/ingest/{pdf,office,workspace}.py` | PDF/DOCX/PPTX/XLSX/CSV/TXT/MD -> `rfp/<slug>.md` with `<!-- page: N -->`, `index.md` (outline, tables, wave anchors, 3rd-party candidates) rebuilt from all files, `read_section`, `list_pages`, caption cache, `cache/prescan.json` |
+| Sizing | `bidcore/sizing.py` | honours reviewer overrides: catalogue phase cells / factor / wave / deletions, Tech Dev edits / deletions / additions, Summary %/rates, hypercare, grid FTE cells |
+| Workbook | `bidcore/render/workbook/{layout,filler,manifest}.py` | old layout cell for cell (`write_effort_workbook`, `*_scope.py` writers, Resources sheet + reconciliation); additions: hidden row-id columns, hidden `_bid`, rates + Total Project Cost row on the Summary; manifest `ledger/manifest-<render_id>.json`; `read_edits` (by row id, skips band/subtotal rows) + `apply_overrides` |
+| Docx | `bidcore/render/docx/` | YASH template (cover tokens, TOC refresh, heading-indent fix); old table builders (per-LOB functional scope, module-wise effort, delivery waves + landscape month grids / phase-skill fallback, combined staffing, role roster, cost, RACI); column-level disclosure + old header-cue filter for writer tables (`bidcore/disclosure.py`); matplotlib diagrams (not the old SVG renderer) |
+| Outline | `bidcore/outline.py` | client-required placement rules, `additional` section, resource/effort combine flip |
+| API / UI / CLI | `src/app/`, `ui/streamlit_app.py`, `scripts/run_local.py`, `Dockerfile` | jobs, bid routes, platform routes (SharePoint + Activity), UI over HTTP, local runner |
+| Skills | `skills/` | ported from the old prompts: six `scope-*` (sections A-G + per-area rules), client-requirements (requirements/excerpts, disclosure, steering), bid-review (verification gate, cost-gap, harmonisation, evaluator), proposal-writing references (indicative breakdown, phase plan, integrations); rfp-reading / sap-scope-mapping / proposal-outline ported earlier; estimating / wave-planning are new (no old equivalent) |
+| Ledger | `bidcore/ledger/sections_effort.py` | DM rows carry the RFP area (`module`), analytics rows `sap_product`; DM sheet label = old `module - domain - object` |
 
 Decisions taken in this session
 - YASH profile: the model may describe YASH qualitatively; specific claims (numbers, named
   clients, partner tiers, certifications, offices) are banned unless RFP/presales supply them.
-- Disclosure defaults to withheld per category (old rule); `resource_location` drops only the
-  Location column, not the role roster.
-- RACI table ported from the old generator (5 roles, one A per row, no per-module rows).
+- Disclosure defaults to withheld per category (old rule).
+- The old hidden 'Pipeline Data' sheet and the LLM-deduced BP ids for non-catalogue items are not
+  ported (call 2 reads the ledger; the non-catalogue BP-ID column shows "-").
 
 ## Open items
-1. **Port from npc-dev** (old repo not yet accessible here; `ArnavJade/sap-backend` is an early
-   2-Sep snapshot without the needed files): the six `scope-*` skills (sections A-G of
-   `third_party_integration_extraction_layer.py:170-676`, plus `*_scope.py`), client-requirements
-   (`client_requirements_layer5.py`), bid-review (generator verification prompts), and workbook
-   layout parity (old writers in `effort_calculator_layer4.py`). Layout changes stay inside
-   `render/workbook/layout.py` + `template_builder.py` + `filler.py`.
-2. **Scope-sync inflation (data correctness, not fixed):** on the fixture bid, scope sync raises
-   Security 35 -> 74 PD and Data Migration 52 -> 127 PD, because step 1 rounds every off-grain
-   category cell UP to 0.5 FTE across all wave months and the tables are then moved up to the grid.
-   Compare with the ARASCO reference workbook before deciding whether this is old behaviour.
-3. Run the full test suite (`.venv/Scripts/python.exe -m pytest tests -q`); the last batch of edits
-   (resourcing/timeline tests, run_local, Dockerfile) was not executed.
-4. Live smoke run once `LLM_MODEL` is set (check Gemini tool-schema handling of nested/nullable fields).
-5. Not built: evals (`evals/`), helm/CI, S3/KMS (dropped by decision).
+1. **Data correctness (not reviewed, by request).** Observed on the fixture bid:
+   - scope sync more than doubles small workstreams (Security 35 -> 74 PD, Data Migration 52 -> 127
+     PD) because off-grain category cells are rounded UP to 0.5 FTE in every month - the old
+     `resource_scope_sync` does the same (`math.ceil`), so this is faithful old behaviour;
+   - programme roles (Program / Project Manager, Solution Architect ...) end up with FTE only in the
+     hypercare months on a small bid: the 8 % management envelope spread over many roles and months
+     rounds to 0 at the 0.5 grain.
+   Compare against the ARASCO reference workbook before trusting totals.
+2. Live smoke run once `LLM_MODEL` is set (check Gemini tool-schema handling of nested/nullable fields).
+3. Not built: evals (`evals/`), helm/CI; diagrams are matplotlib, not a port of `layer5_diagrams.py`.
 
 ## Gotchas
 - `tests/platform` would shadow stdlib `platform` -> use `tests/platform_glue`.

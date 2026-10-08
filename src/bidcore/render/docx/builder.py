@@ -213,6 +213,9 @@ class _Writer:
         for index in range(header_rows):
             _repeat_header(table, index)
         if data.widths and len(data.widths) == cols:
+            table.autofit = False
+            for grid_col, w in zip(table._tbl.tblGrid.findall(qn("w:gridCol")), data.widths):
+                grid_col.set(qn("w:w"), str(int(w * 1440)))      # LibreOffice reads the grid, Word the cells
             for row in table.rows:
                 for cell, w in zip(row.cells, data.widths):
                     cell.width = Inches(w)
