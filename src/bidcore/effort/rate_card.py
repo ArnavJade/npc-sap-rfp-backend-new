@@ -22,6 +22,7 @@ from bidcore.effort.models import PHASE_FIELDS
 from bidcore.paths import rate_card_path
 
 logger = logging.getLogger(__name__)
+_WARNED: set[tuple[str, str, str]] = set()
 
 EXACT, GLOBAL, BORROWED = "exact", "global", "borrowed"
 
@@ -106,7 +107,6 @@ class RateCard:
         self.sheet = sheet
         self.path = Path(path) if path else rate_card_path()
         self._rows = _index(str(self.path.resolve()), sheet)
-        self._warned: set[tuple[str, str]] = set()
 
     def __contains__(self, scope_id: str) -> bool:
         return str(scope_id or "").strip() in self._rows
@@ -135,8 +135,8 @@ class RateCard:
         if "" in bucket:
             return replace(bucket[""], match=GLOBAL)
         source = next(iter(bucket.values()))
-        if (scope_id, country) not in self._warned:
-            self._warned.add((scope_id, country))
+        if (self.sheet, scope_id, country) not in _WARNED:     # once per process, not once per sizing pass
+            _WARNED.add((self.sheet, scope_id, country))
             if country:
                 logger.warning("rate card %s: no row for %s in %s; using its %s figures (labelled %s)",
                                self.sheet, scope_id, country, source.country_key, country)

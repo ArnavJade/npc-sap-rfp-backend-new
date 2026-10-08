@@ -364,6 +364,12 @@ def _add_scope_item(ledger: Ledger, edit: Override) -> str:
 
 def apply_overrides(ledger: Ledger, edits: list[Override]) -> str:
     """Write the reviewer's edits into the ledger (in place); returns a one-line summary."""
+    for edit in edits:
+        # A later wave's Data Migration table is the base table scaled for that wave: an edit there
+        # changes that wave only (sizing applies it); wave 1's table is the base itself.
+        wave_no = (edit.row_id or "").rpartition("#")[2] if "#" in (edit.row_id or "") else ""
+        if edit.section == "data_migration" and edit.kind == "edit" and wave_no not in ("", "1"):
+            edit.section = "data_migration_wave"
     replaced = {(e.section, e.row_id, e.field) for e in edits if e.kind in ("edit", "setting")}
     ledger.overrides = [o for o in ledger.overrides if (o.section, o.row_id, o.field) not in replaced]
     counts = {"applied": 0, "skipped": 0, "conflicts": 0}
@@ -375,6 +381,8 @@ def apply_overrides(ledger: Ledger, edits: list[Override]) -> str:
             continue
         if edit.kind == "setting":
             pass
+        elif edit.section == "data_migration_wave":
+            pass                                   # applied by sizing to that wave's table
         elif edit.section in _OVERRIDE_SECTIONS:
             if edit.section == "scope_items" and edit.kind == "added_row":
                 reason = _add_scope_item(ledger, edit)

@@ -215,10 +215,20 @@ def _guess_band(item: Any, bands: dict[str, Any]) -> str:
     return "sap_tool_standard" if standard else sorted(bands)[0]
 
 
+# Planning-level person-days for an integration whose estimate the agent left out (it sent 0 for all six
+# rows in the second live run); inside the policy band third_party_integration (10-60).
+INTEGRATION_DEFAULT_DAYS = {"Low": 10, "Medium": 20, "High": 40}
+
+
 def _integrations(v: Verdict, ctx: ValidationContext) -> None:
     if not v.row.system.strip():
         v.errors.append("system name is required")
-    if not (0 < v.row.effort_days <= 500):
+    if not v.row.effort_days or v.row.effort_days <= 0:
+        days = INTEGRATION_DEFAULT_DAYS.get(v.row.complexity, 20) * max(int(v.row.interface_count or 1), 1)
+        v.notes.append(f"effort_days missing for {v.row.system}; set to {days} PD ({v.row.complexity} complexity "
+                       f"x {max(int(v.row.interface_count or 1), 1)} interface(s)) - give your own estimate if you have one")
+        v.row.effort_days = float(min(days, 500))
+    elif v.row.effort_days > 500:
         v.errors.append("effort_days must be > 0 and <= 500 (skill effort guide)")
     _check_evidence(v, ctx)
 
@@ -323,6 +333,25 @@ def _wave_plan(v: Verdict, ctx: ValidationContext) -> None:
             v.errors.append(f"tag {tag.row_id}: no such scope_items row")
         elif tag.country and tag.country not in item.countries:
             v.errors.append(f"tag {tag.row_id}: {item.scope_item_id} is not delivered in {tag.country}")
+    dm_ids = {r.row_id for r in ctx.ledger.data_migration.rows}
+    dm_keys = set(ctx.policy.workstreams["data_migration"]["effort_keys"])
+    seen_dm: set[str] = set()
+    for d in plan.data_migration_waves:
+        if d.wave not in waves:
+            v.errors.append(f"data_migration_waves: unknown wave '{d.wave}'; waves are {waves}")
+        if d.wave in seen_dm:
+            v.errors.append(f"data_migration_waves: '{d.wave}' given twice")
+        seen_dm.add(d.wave)
+        if not 0 < d.scale <= 10:
+            v.errors.append(f"data_migration_waves {d.wave}: scale {d.scale} must be > 0 and <= 10")
+        bad_keys = [k for k in d.key_scale if k not in dm_keys]
+        if bad_keys:
+            v.errors.append(f"data_migration_waves {d.wave}: unknown key_scale keys {bad_keys}; use {sorted(dm_keys)}")
+        if any(not 0 <= x <= 10 for x in d.key_scale.values()):
+            v.errors.append(f"data_migration_waves {d.wave}: key_scale factors must be 0-10")
+        unknown = [o for o in d.objects if o not in dm_ids]
+        if unknown:
+            v.errors.append(f"data_migration_waves {d.wave}: no data_migration rows {unknown[:10]}")
     for p in plan.phases:
         if p.wave not in waves:
             v.errors.append(f"phase plan for unknown wave '{p.wave}'")

@@ -85,3 +85,9 @@ def test_non_catalogue_band_is_derived_not_rejected(vctx):
     [module] = validate("non_catalogue", [NonCatalogueItem(name="SAP Solution Manager", kind="sap_module_no_bp",
                                                            evidence=[ev("SAP Solution Manager")])], vctx)
     assert module.ok and module.row.effort_band == "sap_module_no_best_practice" and module.row.effort_days == 40
+
+
+def test_integration_without_effort_gets_a_complexity_default(vctx):
+    [v] = validate("integrations", [Integration(system="Kronos", complexity="High", effort_days=0,
+                                                evidence=[ev("Kronos | Time and attendance")])], vctx)
+    assert v.ok and v.row.effort_days == 40 and v.notes
