@@ -18,37 +18,6 @@ metadata:
 Ported from section (A) of the old scope prompt
 (third_party_integration_extraction_layer.py) and its Tech Dev structuring prompt.
 
-## Detection procedure (mandatory - an empty section is the most common error)
-The first live runs left this section empty or short because the agent read one or two pages and
-stopped. So:
-1. Read the WHOLE RFP with `read_next_pages` (call it until it says the whole RFP is read). The write
-   tool refuses `rows=[]` until you have, and the harness sends you back if you stop early.
-2. While reading, note every candidate below with its page. Then grep for each signal word listed
-   below as a second pass (`grep(pattern="a|b|c", path="/rfp/")` - case-insensitive).
-3. Write what you found in batches of at most 10 rows.
-4. `rows=[]` is right only when no signal matched anywhere. Its none_reason must name the signal
-   words you searched and the pages you checked, e.g. "read p.1-52; grep 'basis|transport|backup|
-   BTP|Cloud Connector|go-live' - no Basis activity stated". A none_reason without this is rejected
-   in review.
-
-Signals (grep): `integrat`, `interface`, `legacy`, `third party|3rd party`, `non-SAP`, `API|REST|
-SOAP|OData|SFTP|EDI|IDoc`, `middleware|CPI|Integration Suite|PI/PO`, `landscape`, `bank|SWIFT`,
-`e-invoic|ZATCA|tax authority|ministry`, `Active Directory`, `portal`.
-
-Call `integration_candidates()` FIRST: it lists the table-scan candidates, every diagram text block
-and the list lines of every page about integrations, interfaces or legacy applications. Then:
-- every non-SAP application in a "legacy applications" / "current landscape" / "integrations
-  required" list that must keep running next to SAP is a row (an application being REPLACED by SAP
-  is not);
-- every non-SAP name in an integration diagram (jumbled box labels - split them into names) is a row;
-- government / bank / tax gateways (e-invoicing authority, ministry portals, SWIFT / bank networks),
-  identity directories (Active Directory), document management (OpenText) and work-management tools
-  (JIRA) count when the RFP connects them to SAP.
-After each write the tool lists table-scan candidates no row covers yet - add them or say why not.
-A client with a legacy-application annexure typically has 15-30 third-party rows; 5 or fewer usually
-means a list was missed. Always give `effort_days` (a missing one is set to a Low 10 / Medium 20 /
-High 40 PD default per interface).
-
 ## Where to look
 Read the whole RFP, not only an obviously-titled integration section. Integration modules,
 interface counts and complexity splits are VERY OFTEN shown only inside `[EMBEDDED IMAGE]` blocks

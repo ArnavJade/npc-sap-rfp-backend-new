@@ -22,23 +22,6 @@ from bidcore.ledger.validate import Verdict, validate
 from harness.context import RunContext
 
 MAX_READ_CHARS = 30_000
-# Sections an agent may only record as empty after reading the RFP (when it is small enough to read in
-# full): the first live runs recorded data_migration / analytics "empty" after reading one page.
-COVERAGE_GATED = {"capabilities", "timeline", "integrations", "ricefw", "fiori", "data_migration", "basis",
-                  "security", "analytics"}
-
-
-def empty_gate(run: RunContext, agent: str, section: str) -> str:
-    """Why `agent` may not record `section` as empty yet ('' = it may)."""
-    if section not in COVERAGE_GATED or not agent:
-        return ""
-    gap = run.coverage_gap(agent)
-    if not gap:
-        return ""
-    return (f"NOT RECORDED: before {section} can be recorded as empty you must read the whole RFP - you {gap}. "
-            "Call read_next_pages until it says the whole RFP is read (tables, annexures and diagram text "
-            "included), write every row you find, and only then call this again with rows=[] if there is "
-            "truly nothing.")
 
 
 def _label(row: Any) -> str:
@@ -73,11 +56,6 @@ def write_rows(run: RunContext, agent: str, section: str, rows: list[Any], mode:
                none_reason: str = "") -> str:
     spec = SECTIONS[section]
     stats = {"saved": 0, "rejected": 0, "reasons": []}
-
-    blocked = "" if rows or run.ledger.load().section(section).rows else empty_gate(run, agent, section)
-    if blocked:
-        run.trace.emit("ledger_rejected", agent, section=section, rejected=0, reasons=[blocked[:300]])
-        raise ToolException(blocked)
 
     def apply(ledger: Ledger) -> tuple[str, bool]:
         sec: RowSection = ledger.section(section)
@@ -133,14 +111,6 @@ def write_rows(run: RunContext, agent: str, section: str, rows: list[Any], mode:
 
     message, ok = run.ledger.update(apply, actor=agent, action=f"write {section}", section=section,
                                    detail=f"{len(rows)} row(s), mode={mode}")
-    if ok and section == "integrations":
-        from harness.tools.integration_tools import uncovered_candidates
-
-        missing = uncovered_candidates(run, [r.system for r in run.ledger.load().integrations.rows])
-        if missing:
-            message += ("\nTable-scan candidates not covered by any integrations row yet: " + "; ".join(missing[:40])
-                        + ". Add each one that is a third-party system to connect, or say in your final reply why "
-                          "it is not (SAP product, legacy system being replaced, not an integration).")
     run.trace.emit("ledger_write", agent, section=section, rows=len(rows), mode=mode, ok=ok,
                    saved=stats["saved"], rejected=stats["rejected"], empty=not rows)
     if stats["rejected"] or not ok:
@@ -152,11 +122,6 @@ def write_rows(run: RunContext, agent: str, section: str, rows: list[Any], mode:
 
 
 def write_object(run: RunContext, agent: str, section: str, data: Any, none_reason: str = "") -> str:
-    blocked = "" if data is not None else empty_gate(run, agent, section)
-    if blocked:
-        run.trace.emit("ledger_rejected", agent, section=section, rejected=0, reasons=[blocked[:300]])
-        raise ToolException(blocked)
-
     def apply(ledger: Ledger) -> tuple[str, bool]:
         sec = ledger.section(section)
         if data is None:

@@ -16,32 +16,6 @@ metadata:
 
 Ported from section (F) of the old scope prompt and security_scope.py.
 
-## Detection procedure (mandatory - an empty section is the most common error)
-The first live runs left this section empty or short because the agent read one or two pages and
-stopped. So:
-1. Read the WHOLE RFP with `read_next_pages` (call it until it says the whole RFP is read). The write
-   tool refuses `rows=[]` until you have, and the harness sends you back if you stop early.
-2. While reading, note every candidate below with its page. Then grep for each signal word listed
-   below as a second pass (`grep(pattern="a|b|c", path="/rfp/")` - case-insensitive).
-3. Write what you found in batches of at most 10 rows.
-4. `rows=[]` is right only when no signal matched anywhere. Its none_reason must name the signal
-   words you searched and the pages you checked, e.g. "read p.1-52; grep 'basis|transport|backup|
-   BTP|Cloud Connector|go-live' - no Basis activity stated". A none_reason without this is rejected
-   in review.
-
-Signals (grep): `role|roles`, `authori[sz]ation`, `GRC|Access Control|IAG|Process Control`,
-`segregation|SoD`, `single sign-on|SSO|Secure Login|identity|Active Directory|LDAP`,
-`logical segregation|data access|restrict|by entity|company code level`, `user provisioning|user
-management`, `security`.
-
-Walk this checklist and write one row for each capability the RFP states (each is a SEPARATE row):
-single sign-on / identity; GRC Access Control or Cloud IAG; GRC Process Control / Risk Management;
-role and authorisation design and build (stated whenever the RFP asks for roles, authorisations, SoD
-or GRC-managed access for the new system); restricting data access by entity / organisational unit /
-table ("logical segregation", "users of one entity must not see another entity's data"). A section
-such as "GRC Enablement scope for ..." usually states several of these at once; a multi-entity RFP
-with a GRC section typically yields 4-6 Security rows.
-
 ## What counts
 Role and authorisation design and build (S/4HANA, Fiori, SAP cloud applications), user provisioning,
 Segregation of Duties / role-conflict management, SAP GRC Access Control or SAP Cloud Identity Access
