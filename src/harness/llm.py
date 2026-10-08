@@ -83,6 +83,44 @@ def disable_general_purpose_subagent(model: BaseChatModel) -> None:
 
 
 _SAFE_CLASSES: dict[type, type] = {}
+_litellm_logging = False
+
+
+def _install_litellm_logging() -> None:
+    """Log every LiteLLM attempt: failures (incl. ones LangChain retries silently) at WARNING with the
+    provider's message, successes at DEBUG with latency - all carrying the bid/agent log context."""
+    global _litellm_logging
+    if _litellm_logging:
+        return
+    import litellm
+    from litellm.integrations.custom_logger import CustomLogger
+
+    calls = logging.getLogger("llm.calls")
+
+    class _Logger(CustomLogger):
+        def _seconds(self, start, end) -> float:
+            try:
+                return (end - start).total_seconds()
+            except Exception:
+                return -1.0
+
+        def log_success_event(self, kwargs, response_obj, start_time, end_time):
+            calls.debug("ok %s in %.1fs", kwargs.get("model"), self._seconds(start_time, end_time))
+
+        def log_failure_event(self, kwargs, response_obj, start_time, end_time):
+            exc = kwargs.get("exception")
+            calls.warning("FAILED %s after %.1fs: %s: %s", kwargs.get("model"), self._seconds(start_time, end_time),
+                          type(exc).__name__ if exc else "error", str(exc)[:2000] if exc else kwargs.get("traceback_exception", ""))
+
+        async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
+            self.log_success_event(kwargs, response_obj, start_time, end_time)
+
+        async def async_log_failure_event(self, kwargs, response_obj, start_time, end_time):
+            self.log_failure_event(kwargs, response_obj, start_time, end_time)
+
+    litellm.callbacks = [*(litellm.callbacks or []), _Logger()]
+    litellm.suppress_debug_info = True          # no "Give Feedback / Get Help" banners in the logs
+    _litellm_logging = True
 
 
 def _schema_safe_class(base: type) -> type:
@@ -122,6 +160,7 @@ def chat_model(role: str, agent: str = "", run_model: str | None = None) -> Base
     temperature = role_cfg.get("temperature", settings.get("temperature"))
     if temperature is not None:
         kwargs["temperature"] = float(temperature)
+    _install_litellm_logging()
     model = _schema_safe_class(ChatLiteLLM)(**kwargs)
     disable_general_purpose_subagent(model)
     log.debug("model for %s/%s -> %s", role, agent, name)

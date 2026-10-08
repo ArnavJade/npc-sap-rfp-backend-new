@@ -55,6 +55,7 @@ def _report(section: str, saved: list[str], rejected: list[Verdict], notes: list
 def write_rows(run: RunContext, agent: str, section: str, rows: list[Any], mode: str = "append",
                none_reason: str = "") -> str:
     spec = SECTIONS[section]
+    stats = {"saved": 0, "rejected": 0, "reasons": []}
 
     def apply(ledger: Ledger) -> tuple[str, bool]:
         sec: RowSection = ledger.section(section)
@@ -101,11 +102,18 @@ def write_rows(run: RunContext, agent: str, section: str, rows: list[Any], mode:
             sec.state, sec.none_reason = "written", ""
         sec.written_by = sorted({*sec.written_by, agent})
         sec.updated_at = utcnow()
+        stats.update(saved=len(saved), rejected=len(rejected),
+                     reasons=[f"row {v.index + 1} ({_label(v.row) or 'unnamed'}): {'; '.join(v.errors)}"[:400]
+                              for v in rejected[:10]])
         return _report(section, saved, rejected, notes), bool(accepted)
 
     message, ok = run.ledger.update(apply, actor=agent, action=f"write {section}", section=section,
                                    detail=f"{len(rows)} row(s), mode={mode}")
-    run.trace.emit("ledger_write", agent, section=section, rows=len(rows), ok=ok)
+    run.trace.emit("ledger_write", agent, section=section, rows=len(rows), mode=mode, ok=ok,
+                   saved=stats["saved"], rejected=stats["rejected"], empty=not rows)
+    if stats["rejected"] or not ok:
+        run.trace.emit("ledger_rejected", agent, section=section, rejected=stats["rejected"] or len(rows),
+                       reasons=stats["reasons"] or [message[:600]])
     if not ok:
         raise ToolException(message)
     return message
@@ -132,7 +140,9 @@ def write_object(run: RunContext, agent: str, section: str, data: Any, none_reas
         return (f"Saved {section}." if data is not None else f"Recorded {section} as empty."), True
 
     message, ok = run.ledger.update(apply, actor=agent, action=f"write {section}", section=section)
-    run.trace.emit("ledger_write", agent, section=section, ok=ok)
+    run.trace.emit("ledger_write", agent, section=section, ok=ok, empty=data is None, saved=int(ok), rejected=int(not ok))
+    if not ok:
+        run.trace.emit("ledger_rejected", agent, section=section, rejected=1, reasons=[message[:1200]])
     if not ok:
         raise ToolException(message)
     return message

@@ -23,7 +23,7 @@ from bidcore.sizing import size_bid
 from harness.context import RunContext
 from harness.teams import build_team
 from harness.tools.ledger_tools import coverage_gaps
-from workflows.common import ingest_uploads, last_ai_text, record_sources
+from workflows.common import staged, ingest_uploads, last_ai_text, record_sources
 
 
 class EffortState(TypedDict, total=False):
@@ -39,11 +39,8 @@ class EffortState(TypedDict, total=False):
 def build_effort_workflow(run: RunContext):
     agent_holder: dict[str, Any] = {}
 
-    def stage(name: str) -> None:
-        run.trace.emit("stage", "", stage=name)
 
     async def ingest(state: EffortState) -> dict:
-        stage("ingest")
         store = run.ledger
         if not store.exists():
             store.save(new_ledger(run.ws.bid_id, state.get("client_name") or "Client",
@@ -55,7 +52,6 @@ def build_effort_workflow(run: RunContext):
         return {"attempts": 0}
 
     async def agents(state: EffortState) -> dict:
-        stage("agents")
         if "agent" not in agent_holder:
             agent_holder["agent"] = build_team(run, state.get("client_name") or "Client")
         agent = agent_holder["agent"]
@@ -75,7 +71,6 @@ def build_effort_workflow(run: RunContext):
         return {"agent_summary": last_ai_text(result), "attempts": state.get("attempts", 0) + 1}
 
     async def verify(state: EffortState) -> dict:
-        stage("verify")
         gaps = coverage_gaps(run)
         run.trace.emit("coverage", "", gaps=gaps, attempt=state.get("attempts", 0))
         return {"gaps": gaps}
@@ -85,7 +80,6 @@ def build_effort_workflow(run: RunContext):
         return "agents" if state.get("gaps") and state.get("attempts", 0) <= retries else "size"
 
     async def size(state: EffortState) -> dict:
-        stage("size")
         ledger = run.ledger.load()
         sizing = size_bid(ledger, run.policy)
         figures = compute_figures(ledger, sizing)
@@ -96,7 +90,6 @@ def build_effort_workflow(run: RunContext):
         return {"notes": figures["notes"]}
 
     async def render(state: EffortState) -> dict:
-        stage("render")
         from bidcore.render.workbook import render_workbook
 
         ledger = run.ledger.load()
@@ -111,7 +104,7 @@ def build_effort_workflow(run: RunContext):
 
     graph = StateGraph(EffortState)
     for name, fn in (("ingest", ingest), ("agents", agents), ("verify", verify), ("size", size), ("render", render)):
-        graph.add_node(name, fn)
+        graph.add_node(name, staged(run, name, fn))
     graph.add_edge(START, "ingest")
     graph.add_edge("ingest", "agents")
     graph.add_edge("agents", "verify")

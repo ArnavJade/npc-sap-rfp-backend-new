@@ -26,7 +26,7 @@ class ScriptedModel(BaseChatModel):
     """Returns the agent's scripted turns in order, then a plain 'done' message forever."""
 
     agent: str
-    script: list[AIMessage]
+    script: list[Any]
     seen: list[list[Any]] = []
 
     @property
@@ -39,6 +39,8 @@ class ScriptedModel(BaseChatModel):
     def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
         self.seen.append(list(messages))
         message = self.script.pop(0) if self.script else AIMessage(content=f"{self.agent}: done.")
+        if isinstance(message, BaseException):
+            raise message
         return ChatResult(generations=[ChatGeneration(message=message.model_copy())])
 
 
