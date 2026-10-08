@@ -27,7 +27,7 @@ WITHHELD_BY = {
                       "fig:summary_of_imp_effort", "table:effort", "table:functional_scope",
                       *(f"table:indicative_breakdown:{g}" for g in INDICATIVE_GROUPS)},
     "resource_allocation": {"table:resource_plan", "fig:peak_fte", "fig:total_man_months"},
-    "resource_location": {"table:role_roster"},
+    "resource_location": set(),       # tables drop their Location column instead (render/docx/tables.py)
     "scope_item_detail": {"fig:scope_item_count", "table:functional_scope"},
 }
 
