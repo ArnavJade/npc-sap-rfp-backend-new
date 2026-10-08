@@ -1,12 +1,10 @@
 # YASH Profile (2, 2.1, 2.2)
 
-Every YASH fact in this chapter comes from the proposal-writing skill's
+What this chapter may say about YASH is set by the proposal-writing skill's
 `reference/yash-profile.md` (sections 2 and 2.2) and `reference/service-catalog.md` (2.1).
-- Never add a YASH fact that those files do not state. That covers headcount, offices, delivery
-  centres, certifications, SAP partner status, awards, named clients, years of experience and
-  numbers of implementations.
-- Never write anything that is inside square brackets in those files. Brackets mark fields that
-  presales has not filled in yet.
+- General, qualitative statements as `yash-profile.md` allows them are fine.
+- Never add a specific claim it bans: headcount, offices, delivery centres, certifications, SAP
+  partner status, awards, named clients, years of experience and numbers of implementations.
 - A YASH chapter is not bespoke because it claims experience. It is bespoke because it connects
   YASH's stated services and practice to this client's business areas and countries
   (`profile`, `scope_by_lob`).

@@ -116,30 +116,31 @@ def _role_roster(ledger: Ledger, sizing: SizingResult, withheld: set[str]) -> Ta
     return TableData("Project roles", headers, rows, widths=[4, 2, 3][:len(headers)])
 
 
-RACI_ROWS = [
-    ("Project governance and steering", "A/R", "A/R"),
-    ("Project planning and status reporting", "R", "C/I"),
-    ("Business requirements and process sign-off", "C", "A/R"),
-    ("Solution design (fit-to-standard workshops)", "A/R", "C"),
-    ("System configuration and build", "A/R", "I"),
-    ("Custom development (RICEFW, Fiori)", "A/R", "C"),
-    ("Third-party system changes and interfaces (client side)", "C", "A/R"),
-    ("Data cleansing and extraction from legacy systems", "C", "A/R"),
-    ("Data transformation and load", "A/R", "C"),
-    ("Unit and integration testing", "A/R", "C"),
-    ("User acceptance testing", "C", "A/R"),
-    ("Key-user training", "A/R", "C"),
-    ("End-user training", "C", "A/R"),
-    ("Cutover planning and execution", "A/R", "C"),
-    ("Infrastructure and hosting provisioning", "C", "A/R"),
-    ("Hypercare support", "A/R", "C"),
+# Ported from the old generator (document_generator_layer5.RACI_*): exactly ONE "A" per row;
+# R = Responsible, A = Accountable, C = Consulted, I = Informed. Modules are not rows (the later
+# convention, skills/proposal-outline/sections/4.6-raci-matrix.md): per-module scope is in Functional Scope.
+RACI_ROLES = ["Client Sponsor", "Client SME / Core Team", "YASH Project Manager", "YASH Solution Architect",
+              "YASH Consultants"]
+RACI_BASE_ACTIVITIES = [
+    ("Project Planning & Governance", ["A", "I", "R", "C", "I"]),
+    ("Fit-to-Standard / Requirements Workshops", ["C", "R", "A", "R", "C"]),
+    ("Solution Design & Blueprint Sign-off", ["A", "C", "R", "R", "C"]),
+    ("Configuration & Build", ["I", "C", "A", "C", "R"]),
+    ("Custom Development (WRICEF)", ["I", "C", "A", "C", "R"]),
+    ("Data Migration", ["C", "R", "A", "C", "R"]),
+    ("Integration Setup", ["I", "C", "A", "R", "R"]),
+    ("Unit & Integration Testing", ["I", "C", "A", "C", "R"]),
+    ("User Acceptance Testing (UAT)", ["A", "R", "C", "C", "C"]),
+    ("Training & Organisational Change Mgmt", ["C", "R", "A", "I", "R"]),
+    ("Cutover & Go-Live", ["A", "C", "R", "C", "R"]),
+    ("Hypercare / Post Go-Live Support", ["I", "C", "A", "C", "R"]),
 ]
 
 
 def _raci(ledger: Ledger, sizing: SizingResult, withheld: set[str]) -> TableData:
+    rows = [[activity, *letters] for activity, letters in RACI_BASE_ACTIVITIES]
     return TableData("RACI matrix (R = Responsible, A = Accountable, C = Consulted, I = Informed)",
-                     ["Activity", "YASH", ledger.meta.client_name or "Client"],
-                     [list(r) for r in RACI_ROWS], widths=[6, 1.5, 1.5])
+                     ["Activity / Deliverable", *RACI_ROLES], rows, widths=[4, 1.3, 1.3, 1.3, 1.3, 1.3])
 
 
 def _wave_plan(ledger: Ledger, sizing: SizingResult, withheld: set[str]) -> TableData:
