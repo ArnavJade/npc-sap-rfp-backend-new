@@ -1,0 +1,51 @@
+# Effort workbook layout. scripts/build_templates.py turns this into assets/templates/template.xlsx
+# (styles, headers, widths, static formulas); the filler only writes rows. Tab order = list order.
+file_name: "Claude_BP_Effort_Output_{client}_{timestamp}_Summary.xlsx"
+sheets:
+  project_summary:   {title: Summary of Project Effort}
+  functional_scope:  {title: Functional Scope Estimation,
+                      headers: [Module, Business Area, BP ID Count, Total Effort (Person Days)]}
+  project_timeline:  {title: Project Timeline}
+  lob:               {title: "{lob}",                       # one copy per LOB, inserted here
+                      headers: [Line of Business, Business Area, Country/Region Key, Scope ID,
+                                Scope ID Description, Complexity, Workshops & Configuration, Unit Testing,
+                                Integration Testing, "Documentation, Training core User",
+                                User Acceptance Testing, Multiplication Factor, Total, Wave],
+                      row_formula: {M: "=ROUND(SUM(G{r}:K{r})*L{r},2)"}}
+  non_catalogue:     {title: Non Catalogue SAP Tools,
+                      headers: [SAP Tool, Description, BP ID Count, Total Effort (Person Days)]}
+  tech_dev:          {title: Tech Dev Scope,
+                      headers: [Module, Object ID/ Name, Object Type, Middleware (Applicable for Interfaces),
+                                Source System (Applicable for Interfaces), Target System (Applicable for Interfaces),
+                                No. of Objects, Complexity, Development, Configuration, Unit Testing, QA Testing, Total],
+                      row_formula: {M: "=SUM(I{r}:L{r})"}}
+  data_migration:    {title: Data Migration Scope,
+                      wave_headers: [Wave, Sequence, Partition Axis, Duration (weeks), Hypercare (weeks), Countries],
+                      table_title: "Data Migration - Conversion Objects (Effort in Days)",
+                      headers: [Objects, "In Scope/ \nOut of Scope", Func. Spec. / Data Template Finalization,
+                                Data Migration Programs Dev. /Changes,
+                                "Iteration 1 (Data loading  and changes after Feedback )",
+                                "Iteration 2 (Data loading  and changes after Feedback )",
+                                "Iteration 3 (Data loading  and changes after Feedback )",
+                                Data Cutover to Production, Total],
+                      row_formula: {I: "=SUM(C{r}:H{r})"}}
+  basis:             {title: Basis Scope, table_title: "BASIS Scope - Activities (Effort in Man Days)",
+                      headers: [Activities, In Scope / Out of Scope, DEV Effort, QA Effort, PRD Effort, Total],
+                      row_formula: {F: "=SUM(C{r}:E{r})"}}
+  security:          {title: Security Scope, table_title: "SAP Security Scope (Effort in Man Days)",
+                      headers: [Activity, In Scope / Out of Scope, Complexity, Effort (in Mandays), Total],
+                      row_formula: {E: '=IF($B{r}="In Scope",N(D{r}),0)'}}
+  analytics:         {title: Analytics Scope,
+                      table_title: "Analytics - Backend/S4HC/SAC Models/Reports/HANA CDS Views (Effort in Man Days)",
+                      headers: [Object, Object Type, Custom / Standard, No. of Objects, In Scope / Out of Scope,
+                                Complexity, Devlp., Unit Testing, QA Testing, Total]}
+  bid:               {title: _bid, hidden: true}            # bid id, ledger version, input-cell manifest
+
+# Summary of Project Effort rows (labels kept verbatim from the effort-estimation template).
+project_summary_rows:
+  - {row: 3, label: Functional Scope, source: functional_scope}
+  - {row: 4, label: Data Migration Efforts, source: data_migration}
+  - {row: 5, label: Tech Dev Scope, source: tech_dev}
+  - {row: 6, label: Security, source: security}
+  - {row: 7, label: "BASIS & SolMan Efforts", source: basis}
+  - {row: 8, label: Analytics Efforts, source: analytics}

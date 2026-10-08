@@ -1,0 +1,49 @@
+# Scope-area registry: one entry per scope-* workstream. A new area = a skill folder + an entry here
+# + a sheet in template.xlsx. Rules here are enforced by ledger_write.
+data_migration:
+  ledger_section: data_migration
+  effort_keys: [func_spec, program_dev, iteration_1, iteration_2, iteration_3, cutover]
+  allowed_effort_days: [0.5, 1.0, 2.0, 3.0, 4.0]
+  default_effort_days: {func_spec: 1.0, program_dev: 1.0, iteration_1: 2.0, iteration_2: 2.0, iteration_3: 2.0, cutover: 1.0}
+  tables_per_wave: true             # one conversion-object table per delivery wave
+  # Rows flagged mm_compulsory (MM master data the skill always lists when SAP MM is in scope,
+  # on a row whose sap_module is MM) are exempt from the RFP-evidence rule.
+  mm_compulsory_exempt_from_evidence: true
+  sheet: Data Migration Scope
+  resource_role: Data Migration Consultants
+  summary_label: Data Migration Efforts
+
+basis:
+  ledger_section: basis
+  effort_keys: [dev, qa, prd]
+  effort_range: [1, 5]              # whole man-days per system; null when Out of Scope
+  default_effort_days: 1
+  sheet: Basis Scope
+  resource_role: BASIS Consultants
+  summary_label: "BASIS & SolMan Efforts"
+
+security:
+  ledger_section: security
+  complexities: [Low, Medium, High]
+  effort_range: [1, 120]            # whole man-days per activity
+  default_effort_days: {Low: 5, Medium: 10, High: 20}
+  sheet: Security Scope
+  resource_role: GRC Consultants
+  summary_label: Security
+
+analytics:
+  ledger_section: analytics
+  object_types: [Model, Report, CDS View]
+  builds: [Custom, Standard]
+  max_objects: 500
+  standard_factor: 1                # multiplier for SAP-delivered (Standard) content
+  complexities: [Low, Medium, High] # column order of the reference_rates lists
+  excluded_row_label: "Analytics (entire scope)"   # the only row when the RFP excludes analytics outright
+  # Man-days per object: object type -> metric -> [Low, Medium, High]
+  reference_rates:
+    Model:      {Devlp: [10, 15, 20], Unit Testing: [3, 4, 5], QA Testing: [1, 2, 3]}
+    Report:     {Devlp: [7, 10, 12],  Unit Testing: [3, 4, 5], QA Testing: [1, 2, 3]}
+    CDS View:   {Devlp: [7, 10, 12],  Unit Testing: [3, 4, 5], QA Testing: [1, 2, 3]}
+  sheet: Analytics Scope
+  resource_role: Analytics / BI Consultants
+  summary_label: Analytics Efforts

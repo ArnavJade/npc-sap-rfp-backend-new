@@ -1,0 +1,22 @@
+# Programme timeline rules (project_timeline_extraction_layer.py).
+weeks_per_month: 4.345
+max_plausible_weeks: 260            # longer = an AMS term or roadmap, not an implementation window
+max_waves: 12
+max_units: 40
+min_wave_weeks: 12
+max_wave_weeks: 156
+min_implementation_weeks: 21.4      # 4 implementation months: smallest recognisable SAP Activate shape
+default_hypercare_weeks: 13         # ~3 months when hypercare is required but unstated
+default_sequencing: parallel        # multi-country rollout with no stated order is simultaneous
+# Banded end-to-end duration from total approved person-days: [upper bound PD, months]
+duration_bands:
+  - [1500, 5]
+  - [4000, 7]
+  - [8000, 9]
+  - [15000, 12]
+  - [25000, 15]
+duration_above_bands_months: 18
+duration_no_effort_months: 6
+wave_axes: [entity, country, module, site, mixed]
+wave_kinds: [template_build, rollout, technical, full]
+unit_kinds: [entity, country, site]

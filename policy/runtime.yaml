@@ -1,0 +1,50 @@
+# Agent runtime: which model each role uses and which agents each API activates.
+# Model strings are LiteLLM strings. "" = use LLM_MODEL from the environment; a role can be
+# overridden with LLM_MODEL_<ROLE> (e.g. LLM_MODEL_WRITER) without editing this file.
+models:
+  # null = the provider's default (recommended for Gemini 3.x, which can loop at low temperatures)
+  temperature: null
+  max_tokens: 16000
+  request_timeout_seconds: 300
+  roles:
+    orchestrator: {model: ""}
+    analyst:      {model: ""}
+    specialist:   {model: ""}
+    mapper:       {model: ""}
+    planner:      {model: ""}
+    writer:       {model: ""}
+    reviewer:     {model: ""}
+    vision:       {model: ""}
+
+limits:
+  orchestrator_recursion_limit: 600   # LangGraph steps for an orchestrator run (subagent runs nest inside)
+  subagent_recursion_limit: 200
+  coverage_retries: 2                 # times the flow sends the orchestrator back for missing sections
+  max_concurrent_jobs: 2
+  model_requests_per_second: 4        # client-side rate limit shared by all agents of a run
+
+# Two teams, never mixed: an API activates only its own team.
+teams:
+  effort:                             # POST /bids (call 1): RFP -> ledger -> effort workbook
+    orchestrator: {name: effort-orchestrator, role: orchestrator, prompt: effort_orchestrator.md,
+                   skills: [estimating]}
+    subagents:
+      - {name: rfp-analyst, role: analyst, skills: [rfp-reading],
+         writes: [rfp_profile, capabilities, timeline]}
+      - {discover: "scope-*", role: specialist}          # every skills/scope-* folder is a specialist
+      - {name: catalogue-mapper, role: mapper, skills: [sap-scope-mapping],
+         writes: [scope_items, non_catalogue]}
+      - {name: wave-planner, role: planner, skills: [wave-planning], writes: [wave_plan]}
+    # The flow checks these after the orchestrator stops (each written, or marked empty with a reason).
+    required_sections: [rfp_profile, capabilities, timeline, scope_items, non_catalogue, integrations,
+                        ricefw, fiori, data_migration, basis, security, analytics, wave_plan]
+
+  proposal:                           # POST /bids/{id}/proposal (call 2): reviewed ledger -> YASH .docx
+    orchestrator: {name: proposal-orchestrator, role: orchestrator, prompt: proposal_orchestrator.md,
+                   skills: [proposal-outline]}
+    subagents:
+      - {name: requirements-analyst, role: analyst, skills: [client-requirements],
+         writes: [response_requirements]}
+      - {name: section-writer, role: writer, skills: [proposal-writing], writes: [drafts]}
+      - {name: reviewer, role: reviewer, skills: [bid-review], writes: [review]}
+    required_sections: [response_requirements, drafts]

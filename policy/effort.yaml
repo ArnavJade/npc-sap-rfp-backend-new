@@ -1,0 +1,58 @@
+# Catalogue (Best Practice) effort and Tech Dev maths.
+rate_card:
+  default_sheet: SAP BP             # SAP BP | YASH BP (BP_Efforts.xlsx sheets, now policy/rate_cards/bp_efforts.parquet)
+  multiplication_factor: 1.0
+  # One effort line per applicable country for multi-country bids (separate config/testing per country).
+  per_country_fan_out: true
+  # Lookup order per scope item: exact country row -> global (blank key) row -> any other country's row.
+  zero_effort_comment: "Not found in rate card; effort set to 0"
+  # Labels of a zero-effort line when neither the ledger item nor the rate card names them.
+  zero_effort_business_area: General
+  zero_effort_description: "Scope Item {scope_id}"
+  unassigned_lob: Unassigned
+
+tech_dev:
+  hours_per_day: 8                  # RICEFW / Fiori / Interface estimates are man-hours; sheet is person-days
+  # Per-object man-hours by complexity, used when the RFP states counts but no effort.
+  per_object_hours:
+    High:      {development: 6.0, configuration: 1.0, unit_testing: 1.5, qa_testing: 1.5}
+    Medium:    {development: 4.0, configuration: 0.5, unit_testing: 1.0, qa_testing: 1.0}
+    Low:       {development: 2.0, configuration: 0.25, unit_testing: 0.5, qa_testing: 0.5}
+    Interface: {development: 4.0, configuration: 0.5, unit_testing: 1.0, qa_testing: 1.0}
+    Fiori:     {development: 224.0, configuration: 24.0, unit_testing: 32.0, qa_testing: 40.0}
+  fiori:
+    complexity: High
+    min_mandays_per_app: 40
+  ricefw_buckets:                   # RFP split key -> sheet complexity
+    - {key: complex, label: "WRICEF - Complex", complexity: High}
+    - {key: medium,  label: "WRICEF - Medium",  complexity: Medium}
+    - {key: simple,  label: "WRICEF - Simple",  complexity: Low}
+  default_object_types: [Report, Enhancement, Form, Interface, Conversion, Workflow]
+  # A third-party integration's known person-day total, split Dev / Config / Unit / QA.
+  third_party_split: {development: 0.60, configuration: 0.10, unit_testing: 0.15, qa_testing: 0.15}
+  # Tech Dev Scope sheet text (Module / Object ID / Object Type cells), verbatim from the old writer.
+  labels:
+    module: All
+    ricefw_name: RICEFW
+    ricefw_type: WRICEF               # explicit RICEFW row with no object type
+    fiori_name: Custom Fiori Applications
+    fiori_type: FIORI
+    third_party_type: Interface
+    third_party_name: "3rd Party Integration Module {n}"   # integration with no system name
+    interface_name: Interface
+    interface_type: Interface
+    interface_complexity: Medium
+
+# Splitting a workstream's person-days across waves (largest remainder, so the waves sum exactly).
+wave_allocation:
+  grain_days: 0.01
+
+non_catalogue:
+  # Codes the catalogue already covers: an item named like these may not sit in non_catalogue.
+  catalogue_covered_codes: [fi, co, fico, mm, sd, pp, qm, wm, ewm, tm]
+  # Indicative person-day bands the agent must justify its figure against (estimating skill).
+  effort_bands:
+    sap_tool_light: [5, 20]
+    sap_tool_standard: [20, 60]
+    sap_module_no_best_practice: [40, 150]
+    third_party_integration: [10, 60]

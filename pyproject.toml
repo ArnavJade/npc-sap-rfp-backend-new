@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sap-rfp-harness"
+version = "0.1.0"
+description = "PoC: SAP RFP agent on the Deep Agents harness - RFP -> effort workbook -> YASH proposal"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    # agent harness + outer state machine + provider-agnostic models
+    "deepagents>=0.7.23,<0.8",
+    "langgraph>=1.2,<2",
+    "langchain>=1.4,<2",
+    "langchain-litellm>=0.11,<0.12",
+    "litellm>=1.104,<1.105",
+    # service + UI
+    "fastapi>=0.141",
+    "uvicorn[standard]>=0.52",
+    "python-multipart>=0.0.32",
+    "httpx>=0.28",
+    "streamlit>=1.60",
+    "python-dotenv>=1.2",
+    "pydantic>=2.13",
+    "pyyaml>=6.0",
+    # platform glue (SharePoint / Graph auth)
+    "msal>=1.37",
+    # ingestion
+    "pymupdf4llm>=1.28",          # AGPL-3.0 (via PyMuPDF): licence review needed before production
+    "python-docx>=1.2",
+    "python-pptx>=1.0.2",
+    # deterministic data + rendering
+    "pandas>=3.0",
+    "pyarrow>=20",
+    "openpyxl>=3.1.5",
+    "docxtpl>=0.20",
+    "matplotlib>=3.11",
+]
+
+[project.optional-dependencies]
+docling = ["docling>=2.135"]      # MIT, heavy (torch); enable with INGEST_PDF_ENGINE=docling
+dev = ["pytest>=8"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+filterwarnings = ["ignore::DeprecationWarning"]

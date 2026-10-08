@@ -1,0 +1,91 @@
+# Staffing curves: phase shape, roles, rounding, rebalance. Ported from resource_grid_layer4.py.
+
+# SAP Activate default phase weights. RELATIVE weights over a wave's implementation months
+# (normalised, so they need not sum to 1). The wave-planner agent may set its own split per wave
+# (with a reason); these are the default and the fallback.
+default_phase_split: {Prepare: 0.08, Explore: 0.18, Realize: 0.50, Deploy: 0.14}
+hypercare_phase: PGLS
+
+# One per programme (staffed once across concurrent waves) - (title, location, fte, window)
+programme_singular_roles:
+  - {title: Program Manager,    location: Onsite, fte: 0.5, window: [0.00, 1.00]}
+  - {title: Solution Architect, location: Onsite, fte: 1.0, window: [0.00, 1.00]}
+# Needed in every wave in flight
+programme_per_wave_roles:
+  - {title: Project Manager,           location: Onsite,   fte: 1.0, window: [0.00, 1.00]}
+  - {title: SCRUM Master,              location: Offshore, fte: 1.0, window: [0.05, 1.00]}
+  - {title: Quality,                   location: Offshore, fte: 0.5, window: [0.10, 1.00]}
+  - {title: OCM Lead,                  location: Onsite,   fte: 1.0, window: [0.00, 1.00]}
+  - {title: Training Lead,             location: Onsite,   fte: 1.0, window: [0.55, 1.00]}
+  - {title: "Technical Lead (ABAP/CPI)", location: Onsite, fte: 1.0, window: [0.10, 1.00]}
+  - {title: Cutover Manager,           location: Onsite,   fte: 1.0, window: [0.70, 1.00]}
+
+lead_profiles:                      # entity kind -> location, base fte, activity window
+  lob:           {location: Onsite,   fte: 1.0, window: [0.00, 1.00]}
+  submodule:     {location: Onsite,   fte: 1.0, window: [0.00, 1.00]}
+  non_catalogue: {location: Offshore, fte: 0.5, window: [0.15, 0.95]}
+  third_party:   {location: Offshore, fte: 0.5, window: [0.15, 0.95]}
+lead_fte_bounds: [0.5, 2.0]
+# Per-LOB consultants row: carries the LOB's approved catalogue days (distributive). Also the location
+# of the specialist category rows and of rows laid out by scope sync.
+consultant_profile: {location: Offshore, fte: 1.0, window: [0.00, 1.00]}
+# Grid row titles for entity roles ({name} = LOB, sub-module or system name).
+role_title_formats:
+  lead: "{name} Lead"
+  consultants: "{name} Consultants"
+  integration_lead: "{name} Integration Lead"
+
+pools:
+  third_party: Third Party Integrations
+  non_catalogue: Non-Catalogue SAP Tools
+# Staff of a pooled block: one lead + (head count - 1) numbered consultants.
+pool_roles:
+  third_party:   {lead: Third Party Integration Lead, consultant: Third Party Integration Consultant}
+  non_catalogue: {lead: Non-Catalogue Tools Lead,     consultant: Non-Catalogue Tools Consultant}
+
+fte_grain: 0.5                      # every printed FTE is a multiple of this (largest-remainder rounding)
+fte_grain_small: 0.25               # small category consultants
+small_category_md_threshold: 200
+pgls_retention: {additive: 0.35, distributive: 0.25}
+wave_role_min_share: 0.05           # a LOB under 5% of a wave raises no roles in it
+max_grid_rows: 200
+
+category_consultants:               # specialist rows sized from their workstream totals
+  data_migration: Data Migration Consultants
+  security: GRC Consultants
+  basis: BASIS Consultants
+  analytics: Analytics / BI Consultants
+
+rebalance:                          # four passes to the Summary of Project Effort
+  mgmt_pct_of_build: 0.08           # pass 1
+  fp_gl_pct_of_build: 0.13          # pass 3: Final Prep 8% + Go-Live 5% on non-mgmt Deploy cells
+
+# Project-management systems keep a named lead instead of joining the pooled teams.
+project_management_keywords:
+  - primavera
+  - ms project
+  - microsoft project
+  - msproject
+  - jira
+  - asana
+  - monday.com
+  - smartsheet
+  - planview
+  - clarity ppm
+  - wrike
+  - trello
+  - project system
+  - portfolio and project management
+  - project management
+  - ppm
+  - project online
+  - project server
+
+scope_sync:                         # resource_scope_sync: scope sheets follow the final grid
+  enabled: true
+  max_variance_days: 30
+  step_days: 1
+  slot_fte: 0.5
+  min_cell_days: 1
+  slot_start_phase: Realize         # a row laid out from its sheet starts at the wave's first month of this phase
+  seed_from: bid_id                 # the old module used an unseeded RNG

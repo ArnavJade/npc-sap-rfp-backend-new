@@ -1,0 +1,21 @@
+# Commercial numbers. Every client-facing figure is computed from these by bidcore; agents never type them.
+currency: USD
+daily_rate_usd: 320                 # blended implementation rate
+working_days_per_month: 21          # 1 man-month = 21 person-days
+hypercare:
+  onsite_rate_usd: 160              # resource-grid PGLS months, onsite rows
+  offshore_rate_usd: 40             # resource-grid PGLS months, offshore rows
+  flat_rate_usd: 360                # single hypercare USD/day quoted in the proposal cost table
+
+# "Summary of Project Effort" ladder (effort-estimation template). Percentages apply to Total Build Effort.
+summary_ladder:
+  final_prep_pct: 8
+  go_live_pct: 5
+  project_mgmt_pct: 8               # ties to the 8% management envelope of rebalance pass 1
+  risk_factor: 1.1                  # Risk Contingency = Summary of Imp x (factor - 1)
+
+# Programme-overhead cap: kept for reference, disabled (the rebalance sizes management to 8% of build).
+programme_overhead:
+  mode: rebalance                   # rebalance | legacy_cap
+  legacy_cap_target: 0.07
+  legacy_cap_ceiling: 0.10

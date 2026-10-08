@@ -1,0 +1,403 @@
+# YASH SAP RFP response - standard outline (ported from the old generator's STATIC_SECTIONS, 42 rows).
+#
+# Fields
+#   id        section number; always a quoted string ("4.10" unquoted would parse as a float).
+#   title     heading text; {client_name} is replaced with the ledger's client name.
+#   level     1 = chapter, 2 = section (3 only for client-required subsections that outline() adds).
+#   narrative true = a section-writer drafts body text for it. Every row is true: the old generator
+#             wrote a 2-3 sentence intro under each chapter heading and an intro before every table
+#             or diagram.
+#   artifact  "" or table:<key> / diagram:<key>; the renderer fills it from the ledger and places it
+#             AFTER the narrative. Writers never repeat it in the draft.
+#   words     [floor, ceiling]. The ceiling is a HARD ceiling, never a target to fill toward (old
+#             word_target). The floor applies only when the section has client-specific material;
+#             with none, 2-3 honest sentences are correct. Adjustments: proposal-outline SKILL.md.
+#   facts     bid_facts views the writer loads. Every writer also loads `requirements` once and
+#             `excerpts:<id>` for each of its sections; `figures` only before using a {{fig:...}}.
+#   guidance  per-section guidance file, relative to this skill folder ("" = none).
+#   combine_resource_effort  default of the resource/effort combine rule (see SKILL.md).
+
+sections:
+  - id: "1"
+    title: "Executive Summary"
+    level: 1
+    narrative: true
+    artifact: ""
+    words: [30, 60]
+    facts: [profile]
+    guidance: sections/chapter-intro.md
+    combine_resource_effort: false
+  - id: "1.1"
+    title: "Our Understanding of {client_name} Objectives"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, scope]
+    guidance: sections/1-executive-summary.md
+    combine_resource_effort: false
+  - id: "1.2"
+    title: "YASH Proposed Solution"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, scope, scope_by_lob, timeline]
+    guidance: sections/1-executive-summary.md
+    combine_resource_effort: false
+  - id: "1.3"
+    title: "Why YASH?"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, scope_by_lob, team]
+    guidance: sections/1-executive-summary.md
+    combine_resource_effort: false
+
+  - id: "2"
+    title: "YASH Profile"
+    level: 1
+    narrative: true
+    artifact: ""
+    words: [30, 60]
+    facts: [profile]
+    guidance: sections/2-yash-profile.md
+    combine_resource_effort: false
+  - id: "2.1"
+    title: "Service Catalog"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, scope_by_lob]
+    guidance: sections/2-yash-profile.md
+    combine_resource_effort: false
+  - id: "2.2"
+    title: "YASH SAP Practice Overview"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, scope_by_lob]
+    guidance: sections/2-yash-profile.md
+    combine_resource_effort: false
+
+  - id: "3"
+    title: "Scope of Work"
+    level: 1
+    narrative: true
+    artifact: ""
+    words: [30, 60]
+    facts: [profile]
+    guidance: sections/chapter-intro.md
+    combine_resource_effort: false
+  - id: "3.1"
+    title: "Products and Organizational Scope"
+    level: 2
+    narrative: true
+    artifact: table:module_summary
+    words: [60, 120]
+    facts: [profile, scope_by_lob]
+    guidance: sections/3.1-products-org-scope.md
+    combine_resource_effort: false
+  - id: "3.2"
+    title: "Functional Scope"
+    level: 2
+    narrative: true
+    artifact: table:functional_scope
+    words: [30, 80]
+    facts: [profile, scope_by_lob]
+    guidance: sections/3.2-functional-scope.md
+    combine_resource_effort: false
+  - id: "3.3"
+    title: "Technical Scope"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, non_catalogue, integrations, tech_dev, workstreams]
+    guidance: sections/3.3-technical-scope.md
+    combine_resource_effort: false
+  - id: "3.4"
+    title: "Assumptions"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [180, 320]
+    facts: [profile, scope_by_lob, non_catalogue, integrations, tech_dev, timeline]
+    guidance: sections/3.4-assumptions.md
+    combine_resource_effort: false
+  - id: "3.5"
+    title: "Scope Exclusions"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [180, 320]
+    facts: [profile, scope, non_catalogue, integrations, workstreams, timeline]
+    guidance: sections/3.5-scope-exclusions.md
+    combine_resource_effort: false
+
+  - id: "4"
+    title: "YASH Solution Approach and Implementation Methodology"
+    level: 1
+    narrative: true
+    artifact: ""
+    words: [30, 60]
+    facts: [profile]
+    guidance: sections/chapter-intro.md
+    combine_resource_effort: false
+  - id: "4.1"
+    title: "Implementation Approach"
+    level: 2
+    narrative: true
+    artifact: diagram:methodology
+    words: [35, 70]
+    facts: [profile, scope_by_lob, timeline, team]
+    guidance: sections/4.1-implementation-approach.md
+    combine_resource_effort: false
+  - id: "4.2"
+    title: "To-Be Architecture"
+    level: 2
+    narrative: true
+    artifact: diagram:architecture
+    words: [35, 70]
+    facts: [profile, scope_by_lob, integrations]
+    guidance: sections/4.2-to-be-architecture.md
+    combine_resource_effort: false
+  - id: "4.3"
+    title: "Implementation Timelines"
+    level: 2
+    narrative: true
+    artifact: diagram:timeline
+    words: [35, 70]
+    facts: [profile, timeline, team]
+    guidance: sections/4.3-implementation-timelines.md
+    combine_resource_effort: false
+  - id: "4.4"
+    title: "Project Team"
+    level: 2
+    narrative: true
+    artifact: table:resource_plan
+    words: [60, 110]
+    facts: [profile, team, timeline]
+    guidance: sections/4.4-project-team.md
+    combine_resource_effort: true
+  - id: "4.5"
+    title: "Project Deliverables"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline, team]
+    guidance: ""
+    combine_resource_effort: false
+  - id: "4.6"
+    title: "RACI Matrix"
+    level: 2
+    narrative: true
+    artifact: table:raci
+    words: [35, 70]
+    facts: [profile, team]
+    guidance: sections/4.6-raci-matrix.md
+    combine_resource_effort: false
+  - id: "4.7"
+    title: "Data Migration Approach"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, scope_by_lob, workstreams]
+    guidance: sections/4.7-4.10-delivery-workstreams.md
+    combine_resource_effort: false
+  - id: "4.8"
+    title: "Testing Approach"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, scope_by_lob, integrations, tech_dev]
+    guidance: sections/4.7-4.10-delivery-workstreams.md
+    combine_resource_effort: false
+  - id: "4.9"
+    title: "Transition & Training Approach"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, team, timeline]
+    guidance: sections/4.7-4.10-delivery-workstreams.md
+    combine_resource_effort: false
+  - id: "4.10"
+    title: "OCM Approach"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, scope_by_lob, team]
+    guidance: sections/4.7-4.10-delivery-workstreams.md
+    combine_resource_effort: false
+  - id: "4.11"
+    title: "Acceptance criteria"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: ""
+    combine_resource_effort: false
+
+  - id: "5"
+    title: "Project Governance and Schedule"
+    level: 1
+    narrative: true
+    artifact: ""
+    words: [30, 60]
+    facts: [profile]
+    guidance: sections/chapter-intro.md
+    combine_resource_effort: false
+  - id: "5.1"
+    title: "Project Management Processes and Practices"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: sections/5-governance.md
+    combine_resource_effort: false
+  - id: "5.2"
+    title: "Project Management Tools and Implementation"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: sections/5-governance.md
+    combine_resource_effort: false
+  - id: "5.3"
+    title: "Communication Management"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: sections/5-governance.md
+    combine_resource_effort: false
+  - id: "5.4"
+    title: "Roles and Responsibilities"
+    level: 2
+    narrative: true
+    artifact: table:role_roster
+    words: [60, 130]
+    facts: [profile, team]
+    guidance: sections/5.4-roles-responsibilities.md
+    combine_resource_effort: true
+  - id: "5.5"
+    title: "Project issues, risks, and variation management plan"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: sections/5-governance.md
+    combine_resource_effort: false
+  - id: "5.6"
+    title: "Issue Resolution Management"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: sections/5-governance.md
+    combine_resource_effort: false
+  - id: "5.7"
+    title: "Project Governance and Escalation Matrix"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: sections/5-governance.md
+    combine_resource_effort: false
+  - id: "5.8"
+    title: "Quality Management"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: sections/5-governance.md
+    combine_resource_effort: false
+  - id: "5.9"
+    title: "Project Quality"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: sections/5-governance.md
+    combine_resource_effort: false
+  - id: "5.10"
+    title: "Quality Assurance Control"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: sections/5-governance.md
+    combine_resource_effort: false
+  - id: "5.11"
+    title: "Change Management and Control"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, timeline]
+    guidance: sections/5-governance.md
+    combine_resource_effort: false
+
+  - id: "6"
+    title: "Proposal Cost Sheet and Rates"
+    level: 1
+    narrative: true
+    artifact: ""
+    words: [30, 60]
+    facts: [profile]
+    guidance: sections/chapter-intro.md
+    combine_resource_effort: false
+  - id: "6.1"
+    title: "Effort Estimation"
+    level: 2
+    narrative: true
+    artifact: table:effort
+    words: [40, 100]
+    facts: [profile, scope_by_lob, non_catalogue, integrations, commercials, timeline, figures]
+    guidance: sections/6.1-effort-estimation.md
+    combine_resource_effort: true
+  - id: "6.2"
+    title: "Cost Estimates"
+    level: 2
+    narrative: true
+    artifact: table:cost
+    words: [25, 60]
+    facts: [profile, commercials, timeline, team, figures]
+    guidance: sections/6.2-cost-estimates.md
+    combine_resource_effort: true
+  - id: "6.3"
+    title: "Commercial Terms and Conditions"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile, commercials, timeline, figures]
+    guidance: ""
+    combine_resource_effort: false
+  - id: "6.4"
+    title: "General Terms and Conditions"
+    level: 2
+    narrative: true
+    artifact: ""
+    words: [50, 120]
+    facts: [profile]
+    guidance: ""
+    combine_resource_effort: false

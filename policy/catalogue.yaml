@@ -1,0 +1,17 @@
+# Catalogue mapping rules enforced by ledger validators.
+allowed_countries: ["AE", "AT", "AU", "BE", "BR", "CA", "CH", "CN", "CZ", "DE", "DK", "ES", "FI", "FR",
+                    "GB", "HK", "HU", "ID", "IE", "IN", "IT", "JP", "KR", "LU", "MX", "MY", "NL", "NO",
+                    "NZ", "PH", "PL", "PT", "RO", "RU", "SA", "SE", "SG", "SK", "TH", "TR", "TW", "US",
+                    "ZA"]   # quoted: unquoted NO is YAML boolean false
+lobs: [Application Platform and Infrastructure, Asset Management, Database and Data Management, Finance,
+       Human Resources, IT Management, Manufacturing, R&D/Engineering, Sales, Service,
+       Solutions for Specific Industries, Sourcing and Procurement, Supply Chain]
+# LOBs that need explicit RFP evidence (no pre-resolution from a generic mention).
+sensitive_lobs: [Application Platform and Infrastructure, Asset Management, Database and Data Management,
+                 Human Resources, IT Management, R&D/Engineering]
+# Finance core: a Finance-in-scope bid always carries these business areas.
+finance_core_business_areas: [Accounting and Financial Close, Advanced Financial Operations,
+                              Cost Management and Profitability Analysis]
+scope_types: [in_scope, optional_scope]
+implementation_statuses: [new_implementation, existing_change, existing_no_change]
+confidence_levels: [high, medium, low]
