@@ -82,6 +82,21 @@ def disable_general_purpose_subagent(model: BaseChatModel) -> None:
         _disabled_gp_for.add(provider)
 
 
+_SAFE_CLASSES: dict[type, type] = {}
+
+
+def _schema_safe_class(base: type) -> type:
+    """`base` with bind_tools sending provider-safe schemas (see harness.tool_schema)."""
+    if base not in _SAFE_CLASSES:
+        from harness.tool_schema import safe_tools
+
+        def bind_tools(self, tools, tool_choice=None, **kwargs):
+            return base.bind_tools(self, safe_tools(list(tools)), tool_choice=tool_choice, **kwargs)
+
+        _SAFE_CLASSES[base] = type(f"SchemaSafe{base.__name__}", (base,), {"bind_tools": bind_tools})
+    return _SAFE_CLASSES[base]
+
+
 def chat_model(role: str, agent: str = "", run_model: str | None = None) -> BaseChatModel:
     """The chat model for one agent. Raises ModelNotConfigured when nothing resolves."""
     if _factory is not None:
@@ -107,7 +122,7 @@ def chat_model(role: str, agent: str = "", run_model: str | None = None) -> Base
     temperature = role_cfg.get("temperature", settings.get("temperature"))
     if temperature is not None:
         kwargs["temperature"] = float(temperature)
-    model = ChatLiteLLM(**kwargs)
+    model = _schema_safe_class(ChatLiteLLM)(**kwargs)
     disable_general_purpose_subagent(model)
     log.debug("model for %s/%s -> %s", role, agent, name)
     return model
