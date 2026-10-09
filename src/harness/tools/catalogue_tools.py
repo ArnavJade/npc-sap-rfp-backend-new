@@ -149,8 +149,7 @@ def _known_refs(run: RunContext, refs: list[str]) -> tuple[list[str], str]:
     known = [r for r in refs if r in ids]
     unknown = [r for r in refs if r not in ids]
     note = (f"[capability_refs {unknown} do not exist and were left out; ids run {caps[0].row_id}.."
-            f"{caps[-1].row_id} - see ledger_read('capabilities')]
-") if unknown else ""
+            f"{caps[-1].row_id} - see ledger_read('capabilities')]") if unknown else ""
     return known, note
 
 
